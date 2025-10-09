@@ -4,11 +4,11 @@ setup(
     name="uhop",
     version="0.1.0",
     author="UHOP Systems",
-    author_email="support@uhop.dev",
+    author_email="danbis664@gmail.com",
     description="Universal Hardware Optimization Protocol (UHOP) — AI-powered runtime kernel optimizer for developers.",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/uhop-labs/uhop",
+    url="https://github.com/sevenloops/uhop",
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
