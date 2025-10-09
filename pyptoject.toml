@@ -7,7 +7,7 @@ name = "uhop"
 version = "0.1.0"
 description = "Universal Hardware Optimization Protocol (UHOP) — AI-powered runtime kernel optimizer for developers."
 authors = [
-    { name = "UHOP Systems", email = "support@uhop.dev" }
+    { name = "UHOP Systems", email = "danbis664@gmail.com" }
 ]
 readme = "README.md"
 license = { text = "MIT" }
@@ -38,9 +38,9 @@ amd = ["rocm-py>=6.0.1"]
 nvidia = ["cupy-cuda12x>=13.0.0"]
 
 [project.urls]
-Homepage = "https://github.com/uhop-labs/uhop"
+Homepage = "https://github.com/sevenloops/uhop"
 Documentation = "https://uhop.dev/docs"
-Source = "https://github.com/uhop-labs/uhop"
+Source = "https://github.com/sevenloops/uhop"
 
 [project.scripts]
 uhop = "uhop.cli:main"
