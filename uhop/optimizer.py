@@ -1,139 +1,247 @@
 # uhop/optimizer.py
 """
-High-level developer-facing optimizer and decorator.
-It tries hardware backends first (CUDA via PyCUDA), then attempts AI-generated kernels,
-benchmarks, caches the winner, and uses a sandbox when executing AI-generated Python kernels.
+UHOP optimizer: multi-backend decision flow.
 
-Usage:
-    from uhop import UHopOptimizer, optimize
-    hop = UHopOptimizer()
-    @hop.optimize("matmul")
-    def matmul_np(A, B):
-        return A @ B
+Priority:
+  1) Torch backend (CUDA / ROCm-built PyTorch / MPS) via torch_backend
+  2) Triton backend (triton)
+  3) OpenCL backend (pyopencl)
+  4) AI-generated kernels (CUDA via pycuda if available, else Python via sandbox)
+  5) NumPy baseline (fallback)
+
+Caches chosen backend and associated metadata in UhopCache.
 """
-
+import importlib.util
 import os
-import time
-import numpy as np
 from functools import wraps
 from pathlib import Path
+from typing import Callable, Any, Optional
+import numpy as np
 
-from .hardware import detect_hardware
+from .hardware import detect_hardware, HardwareProfile
 from .cache import UhopCache
 from .core.benchmark import benchmark_callable
-from .core.executor import CudaExecutor, CpuExecutor
-from .core.compiler import CUDACompiler
-from .ai_codegen import generator as ai_gen
-from .sandbox import run_generated_function
+from .sandbox import run_generated_python
+from .ai_codegen.generator import AICodegen
+
+# backends
+from .backends import (
+    is_torch_available, torch_matmul, torch_conv2d, torch_relu,
+    is_triton_available, triton_matmul, triton_conv2d, triton_relu,
+    is_opencl_available, opencl_matmul, opencl_conv2d, opencl_relu
+)
 
 CACHE = UhopCache()
 
 class UHopOptimizer:
-    def __init__(self, mode: str = "auto", cache_dir: str = None):
-        self.mode = mode
+    def __init__(self):
         self.hw = detect_hardware()
         self.cache = CACHE
-
-    def compile_and_run_cuda_source(self, cuda_source: str, kernel_name: str, A, B):
-        # compile via pycuda SourceModule (which compiles to PTX under the hood)
-        from pycuda.compiler import SourceModule
-        mod = SourceModule(cuda_source)
-        execr = CudaExecutor(module_obj=mod)
-        return execr.run_matmul(kernel_name, A, B)
-
-    def try_cuda_kernel_file(self, cu_path: str, kernel_name: str, A, B):
-        src = Path(cu_path).read_text()
+        self.codegen = AICodegen()
+        # detect optional runtimes
         try:
-            return self.compile_and_run_cuda_source(src, kernel_name, A, B)
-        except Exception as e:
-            raise
+            import pycuda  # noqa: F401
+            self._pycuda_available = True
+        except Exception:
+            self._pycuda_available = False
+
+    # Helper to import python module by path and call function
+    def _import_and_call(self, path: str, fn_name: str, *args):
+        spec = importlib.util.spec_from_file_location("uhop_generated", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)  # type: ignore
+        fn = getattr(mod, fn_name)
+        return fn(*args)
+
+    # Helper to compile-run CUDA source using PyCUDA SourceModule (if available)
+    def _run_cuda_source_via_pycuda(self, source_path: Path, kernel_name: str, a: np.ndarray, b: Optional[np.ndarray] = None):
+        if not self._pycuda_available:
+            raise RuntimeError("pycuda not available")
+        from pycuda.compiler import SourceModule
+        import pycuda.driver as cuda
+        import numpy as _np
+        src = source_path.read_text()
+        mod = SourceModule(src)
+        func = mod.get_function(kernel_name)
+        # For matmul kernel signature we follow convention (A, B, C, N, M, K)
+        if b is None:
+            raise RuntimeError("CUDA kernel expects two inputs (a,b)")
+        A = _np.array(a, dtype=_np.float32)
+        B = _np.array(b, dtype=_np.float32)
+        N, M = A.shape
+        M2, K = B.shape
+        assert M == M2
+        C = _np.empty((N, K), dtype=_np.float32)
+        A_gpu = cuda.mem_alloc(A.nbytes)
+        B_gpu = cuda.mem_alloc(B.nbytes)
+        C_gpu = cuda.mem_alloc(C.nbytes)
+        cuda.memcpy_htod(A_gpu, A)
+        cuda.memcpy_htod(B_gpu, B)
+        block = (16, 16, 1)
+        grid = ((K + block[0] - 1) // block[0], (N + block[1] - 1) // block[1])
+        func(A_gpu, B_gpu, C_gpu, np.int32(N), np.int32(M), np.int32(K), block=block, grid=grid)
+        cuda.memcpy_dtoh(C, C_gpu)
+        return C
 
     def optimize(self, op_name: str, sandbox_timeout: int = 8):
-        def decorator(fn):
+        """
+        Decorator that optimizes a fallback Python function `fn(a,b)` for op_name.
+        """
+        def decorator(fn: Callable):
             cache_key = op_name
 
             @wraps(fn)
             def wrapper(*args, **kwargs):
-                if len(args) < 2:
-                    raise ValueError("Expected (A, B, ...)")
-                A, B = args[0], args[1]
-                A_np = np.array(A, dtype=np.float32)
-                B_np = np.array(B, dtype=np.float32)
+                # Validate args
+                if len(args) < 1:
+                    raise ValueError("Expected at least one positional arg (e.g., a, optionally b).")
+                # Make numpy copies for consistent benchmarks
+                a = np.array(args[0])
+                b = np.array(args[1]) if len(args) > 1 else None
 
-                # 1) cached record?
+                # 0) If cached & backend recorded, try to use cache first
                 rec = self.cache.get(cache_key)
                 if rec:
-                    # if backend is cuda and a module file exists, prefer it
-                    if rec.get("backend") == "cuda" and rec.get("path"):
-                        try:
-                            res = self.try_cuda_kernel_file(rec["path"], rec.get("kernel_name", "matmul_kernel"), A_np, B_np)
-                            return res
-                        except Exception:
-                            # cache invalid -> continue
-                            pass
-                    if rec.get("backend") == "numpy":
-                        return fn(A_np, B_np)
+                    backend = rec.get("backend")
+                    try:
+                        if backend == "torch":
+                            # Use torch wrapper; for conv2d we need weight argument
+                            if op_name == "matmul":
+                                return torch_matmul(a, b)
+                            if op_name == "conv2d":
+                                return torch_conv2d(a, b, stride=kwargs.get("stride",1), padding=kwargs.get("padding",0))
+                            if op_name == "relu":
+                                return torch_relu(a)
+                        if backend == "triton":
+                            if op_name == "matmul":
+                                return triton_matmul(a, b)
+                            if op_name == "relu":
+                                return triton_relu(a)
+                        if backend == "opencl":
+                            if op_name == "matmul":
+                                return opencl_matmul(a, b)
+                            if op_name == "conv2d":
+                                return opencl_conv2d(a, b, stride=kwargs.get("stride",1), padding=kwargs.get("padding",0))
+                            if op_name == "relu":
+                                return opencl_relu(a)
+                        if backend == "ai_cuda":
+                            # path available
+                            path = rec.get("path")
+                            kernel_name = rec.get("kernel_name", f"{op_name}_kernel")
+                            return self._run_cuda_source_via_pycuda(Path(path), kernel_name, a, b)
+                        if backend == "ai_python":
+                            path = rec.get("path")
+                            fn_name = rec.get("function", f"generated_{op_name}")
+                            return run_generated_python(path, fn_name, a, b, timeout=sandbox_timeout)
+                    except Exception:
+                        # if cached backend failed, fall through to detection/regeneration
+                        pass
 
-                # 2) try native CUDA backend if available
+                # 1) Try Torch backend (CUDA/ROCm/MPS)
                 try:
-                    import pycuda
-                    # run built-in CUDA kernel shipped with project
-                    built_in = Path(__file__).resolve().parent / "kernels" / "cuda" / f"{op_name}.cu"
-                    if built_in.exists():
-                        try:
-                            res = self.try_cuda_kernel_file(str(built_in), f"{op_name}_kernel", A_np, B_np)
-                            self.cache.set(cache_key, {"backend":"cuda", "path": str(built_in), "kernel_name": f"{op_name}_kernel", "hardware": self.hw.__dict__})
+                    if is_torch_available():
+                        if op_name == "matmul":
+                            res = torch_matmul(a, b)
+                            self.cache.set(cache_key, {"backend":"torch", "hardware": self.hw.__dict__})
                             return res
-                        except Exception:
-                            pass
+                        if op_name == "conv2d":
+                            res = torch_conv2d(a, b, stride=kwargs.get("stride",1), padding=kwargs.get("padding",0))
+                            self.cache.set(cache_key, {"backend":"torch", "hardware": self.hw.__dict__})
+                            return res
+                        if op_name == "relu":
+                            res = torch_relu(a)
+                            self.cache.set(cache_key, {"backend":"torch", "hardware": self.hw.__dict__})
+                            return res
                 except Exception:
-                    # pycuda not installed or no cuda device
                     pass
 
-                # 3) benchmark numpy baseline
+                # 2) Try Triton backend
                 try:
-                    t_base = benchmark_callable(lambda: fn(A_np, B_np), runs=3)
+                    if is_triton_available():
+                        if op_name == "matmul":
+                            res = triton_matmul(a, b)
+                            self.cache.set(cache_key, {"backend":"triton", "hardware": self.hw.__dict__})
+                            return res
+                        if op_name == "relu":
+                            res = triton_relu(a)
+                            return res
+                except Exception:
+                    pass
+
+                # 3) Try OpenCL backend
+                try:
+                    if is_opencl_available():
+                        if op_name == "matmul":
+                            res = opencl_matmul(a, b)
+                            self.cache.set(cache_key, {"backend":"opencl", "hardware": self.hw.__dict__})
+                            return res
+                        if op_name == "conv2d":
+                            res = opencl_conv2d(a, b, stride=kwargs.get("stride",1), padding=kwargs.get("padding",0))
+                            self.cache.set(cache_key, {"backend":"opencl", "hardware": self.hw.__dict__})
+                            return res
+                        if op_name == "relu":
+                            res = opencl_relu(a)
+                            return res
+                except Exception:
+                    pass
+
+                # 4) Benchmark NumPy baseline
+                try:
+                    t_base = benchmark_callable(lambda: fn(*args, **kwargs), args=(), runs=3)
                 except Exception:
                     t_base = float("inf")
 
-                # 4) try AI-generated kernel (CUDA C) using AICodegen
+                # 5) Try AI generation
+                t_ai = float("inf")
                 ai_path = None
+                ai_backend = None
                 try:
-                    codegen = ai_gen.AICodegen()
-                    prompt = self._prompt_for(op_name)
-                    ai_path = codegen.generate(prompt, out_name=f"ai_{op_name}.cu")
-                    # verify by compiling & running a single trial
-                    res = self.try_cuda_kernel_file(str(ai_path), f"{op_name}_kernel", A_np, B_np)
-                    t_ai = benchmark_callable(lambda: self.try_cuda_kernel_file(str(ai_path), f"{op_name}_kernel", A_np, B_np), runs=2)
+                    # decide target: prefer CUDA if pycuda available, else python sandbox
+                    target = "cuda" if self._pycuda_available else "python"
+                    ai_path = self.codegen.generate(op_name, target=target)
+                    # run once to validate
+                    if target == "cuda":
+                        try:
+                            out = self._run_cuda_source_via_pycuda(ai_path, f"{op_name}_kernel", a, b)
+                            # benchmark ai (quick runs)
+                            t_ai = benchmark_callable(lambda: self._run_cuda_source_via_pycuda(ai_path, f"{op_name}_kernel", a, b), runs=2)
+                            ai_backend = "ai_cuda"
+                        except Exception:
+                            ai_path = None
+                            t_ai = float("inf")
+                    else:
+                        # python sandbox
+                        try:
+                            fn_name = f"generated_{op_name}"
+                            out = run_generated_python(str(ai_path), fn_name, a, b, timeout=sandbox_timeout)
+                            t_ai = benchmark_callable(lambda: run_generated_python(str(ai_path), fn_name, a, b, timeout=sandbox_timeout), runs=2)
+                            ai_backend = "ai_python"
+                        except Exception:
+                            ai_path = None
+                            t_ai = float("inf")
                 except Exception:
                     ai_path = None
                     t_ai = float("inf")
 
-                winner = "numpy"
+                # 6) Choose winner
                 if t_ai < t_base and ai_path:
-                    winner = "ai"
-
-                if winner == "ai":
-                    self.cache.set(cache_key, {"backend":"cuda", "path": str(ai_path), "kernel_name": f"{op_name}_kernel", "hardware": self.hw.__dict__})
-                    return self.try_cuda_kernel_file(str(ai_path), f"{op_name}_kernel", A_np, B_np)
+                    # cache and return ai result
+                    if ai_backend == "ai_cuda":
+                        self.cache.set(cache_key, {"backend":"ai_cuda", "path": str(ai_path), "kernel_name": f"{op_name}_kernel", "hardware": self.hw.__dict__})
+                        return self._run_cuda_source_via_pycuda(ai_path, f"{op_name}_kernel", a, b)
+                    else:
+                        self.cache.set(cache_key, {"backend":"ai_python", "path": str(ai_path), "function": f"generated_{op_name}", "hardware": self.hw.__dict__})
+                        return run_generated_python(str(ai_path), f"generated_{op_name}", a, b, timeout=sandbox_timeout)
                 else:
-                    # fallback to numpy baseline
-                    self.cache.set(cache_key, {"backend":"numpy", "path": None, "kernel_name": fn.__name__, "hardware": self.hw.__dict__})
-                    return fn(A_np, B_np)
+                    # fallback to baseline
+                    self.cache.set(cache_key, {"backend":"numpy", "path": None, "function": fn.__name__, "hardware": self.hw.__dict__})
+                    return fn(*args, **kwargs)
+
             return wrapper
         return decorator
 
-    def _prompt_for(self, op_name: str) -> str:
-        from .ai_codegen import prompt_templates
-        if op_name == "matmul":
-            return prompt_templates.MATMUL_CUDA_PROMPT
-        if op_name == "relu":
-            return prompt_templates.RELU_CUDA_PROMPT
-        if op_name == "conv2d":
-            return prompt_templates.CONV2D_CUDA_PROMPT
-        return prompt_templates.MATMUL_CUDA_PROMPT
-
-# convenience
+# convenience global optimizer for decorators
 _GLOBAL_OPT = UHopOptimizer()
+
 def optimize(op_name: str):
     return _GLOBAL_OPT.optimize(op_name)
