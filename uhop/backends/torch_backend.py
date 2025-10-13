@@ -34,6 +34,21 @@ def is_torch_available() -> bool:
     except Exception:
         return False
 
+def torch_has_accelerator() -> bool:
+    try:
+        import torch
+    except Exception:
+        return False
+    try:
+        if torch.cuda.is_available():
+            return True
+    except Exception:
+        pass
+    try:
+        return getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available()
+    except Exception:
+        return False
+
 def torch_matmul(a, b):
     import torch
     dev = _torch_device_preference()

@@ -18,17 +18,17 @@ from .optimizer import _GLOBAL_OPT
 class UHOPConv2DFunction(Function):
     @staticmethod
     def forward(ctx, input_t, weight_t, stride=1, padding=0):
-        # convert to numpy and call UHOP conv2d implementation
-        inp_np = input_t.detach().cpu().numpy()
-        w_np = weight_t.detach().cpu().numpy()
-        # UHOP decorator expects a function, but we can call optimizer logic directly:
-        # use the cached or selected backend via the optimize decorator on a small wrapper
-        @(_GLOBAL_OPT.optimize("conv2d"))
-        def conv_np(a, b, stride=1, padding=0):
-            # baseline numpy conv (naive)
+        # Fast path: use torch conv2d directly (no autograd graph is recorded here).
+        try:
+            import torch.nn.functional as F
+            out_t = F.conv2d(input_t, weight_t, stride=stride, padding=padding)
+        except Exception:
+            # Fallback: very slow naive NumPy conv
+            inp_np = input_t.detach().cpu().numpy()
+            w_np = weight_t.detach().cpu().numpy()
             import numpy as _np
-            N, C, H, W = a.shape
-            Cout, Cin, KH, KW = b.shape
+            N, C, H, W = inp_np.shape
+            Cout, Cin, KH, KW = w_np.shape
             outH = H - KH + 1
             outW = W - KW + 1
             out = _np.zeros((N, Cout, outH, outW), dtype=_np.float32)
@@ -40,12 +40,9 @@ class UHOPConv2DFunction(Function):
                             for ci in range(Cin):
                                 for ky in range(KH):
                                     for kx in range(KW):
-                                        s += a[n,ci,y+ky,x+kx] * b[co,ci,ky,kx]
+                                        s += inp_np[n,ci,y+ky,x+kx] * w_np[co,ci,ky,kx]
                             out[n,co,y,x] = s
-            return out
-
-        out_np = conv_np(inp_np, w_np, stride=stride, padding=padding)
-        out_t = torch.from_numpy(out_np).to(input_t.device)
+            out_t = torch.from_numpy(out).to(input_t.device)
         ctx.save_for_backward(input_t, weight_t)
         ctx.stride = stride
         ctx.padding = padding
@@ -55,11 +52,15 @@ class UHOPConv2DFunction(Function):
     def backward(ctx, grad_output):
         input_t, weight_t = ctx.saved_tensors
         # Fallback: compute gradients using torch CPU autograd for correctness (inefficient).
+        import torch
         import torch.nn.functional as F
-        input_cpu = input_t.detach().cpu().requires_grad_(True)
-        weight_cpu = weight_t.detach().cpu().requires_grad_(True)
-        out = F.conv2d(input_cpu, weight_cpu, stride=ctx.stride, padding=ctx.padding)
-        out.backward(grad_output.detach().cpu())
-        grad_input = input_cpu.grad.to(grad_output.device)
-        grad_weight = weight_cpu.grad.to(grad_output.device)
+        from torch.nn.grad import conv2d_input, conv2d_weight
+        input_cpu = input_t.detach().cpu()
+        weight_cpu = weight_t.detach().cpu()
+        grad_out_cpu = grad_output.detach().cpu()
+        # Compute grads directly using torch.nn.grad helpers (no new graph built)
+        grad_input = conv2d_input(input_cpu.shape, weight_cpu, grad_out_cpu, stride=ctx.stride, padding=ctx.padding)
+        grad_weight = conv2d_weight(input_cpu, weight_cpu.shape, grad_out_cpu, stride=ctx.stride, padding=ctx.padding)
+        grad_input = grad_input.to(grad_output.device)
+        grad_weight = grad_weight.to(grad_output.device)
         return grad_input, grad_weight, None, None

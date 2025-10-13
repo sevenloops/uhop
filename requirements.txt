@@ -1,11 +1,10 @@
 # Core Dependencies
 numpy>=1.26.0
 torch>=2.2.0
-triton>=2.2.0
+triton ; platform_system=="Linux"
 
 # AI Kernel Generation
 openai>=1.44.0
-deepseek-sdk>=0.2.1
 
 # Hardware Detection
 py-cpuinfo>=9.0.0
@@ -39,4 +38,4 @@ jupyter>=1.1.1
 
 # Optional: NVIDIA/AMD backend support
 cupy-cuda12x>=13.0.0 ; platform_system=="Linux"
-rocm-py>=6.0.1
+rocm-py>=6.0.1 ; platform_system=="Linux"

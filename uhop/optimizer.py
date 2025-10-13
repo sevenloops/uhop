@@ -28,8 +28,9 @@ from .ai_codegen.generator import AICodegen
 from .backends import (
     is_torch_available, torch_matmul, torch_conv2d, torch_relu,
     is_triton_available, triton_matmul, triton_conv2d, triton_relu,
-    is_opencl_available, opencl_matmul, opencl_conv2d, opencl_relu
+    is_opencl_available, opencl_matmul, opencl_conv2d, opencl_relu,
 )
+from .backends.torch_backend import torch_has_accelerator
 
 CACHE = UhopCache()
 
@@ -137,9 +138,40 @@ class UHopOptimizer:
                         # if cached backend failed, fall through to detection/regeneration
                         pass
 
-                # 1) Try Torch backend (CUDA/ROCm/MPS)
+                # 1) Try GPU-accelerated backends first (prefer GPU over CPU)
+                # 1a) Triton (typically NVIDIA GPUs)
                 try:
-                    if is_torch_available():
+                    if is_triton_available():
+                        if op_name == "matmul":
+                            res = triton_matmul(a, b)
+                            self.cache.set(cache_key, {"backend":"triton", "hardware": self.hw.__dict__})
+                            return res
+                        if op_name == "relu":
+                            res = triton_relu(a)
+                            return res
+                except Exception:
+                    pass
+
+                # 1b) OpenCL (AMD/Intel GPUs)
+                try:
+                    if is_opencl_available():
+                        if op_name == "matmul":
+                            res = opencl_matmul(a, b)
+                            self.cache.set(cache_key, {"backend":"opencl", "hardware": self.hw.__dict__})
+                            return res
+                        if op_name == "conv2d":
+                            res = opencl_conv2d(a, b, stride=kwargs.get("stride",1), padding=kwargs.get("padding",0))
+                            self.cache.set(cache_key, {"backend":"opencl", "hardware": self.hw.__dict__})
+                            return res
+                        if op_name == "relu":
+                            res = opencl_relu(a)
+                            return res
+                except Exception:
+                    pass
+
+                # 1c) Torch GPU/MPS
+                try:
+                    if is_torch_available() and torch_has_accelerator():
                         if op_name == "matmul":
                             res = torch_matmul(a, b)
                             self.cache.set(cache_key, {"backend":"torch", "hardware": self.hw.__dict__})
@@ -155,32 +187,20 @@ class UHopOptimizer:
                 except Exception:
                     pass
 
-                # 2) Try Triton backend
+                # 2) Torch CPU fallback if no accelerator or GPU backend succeeded
                 try:
-                    if is_triton_available():
+                    if is_torch_available():
                         if op_name == "matmul":
-                            res = triton_matmul(a, b)
-                            self.cache.set(cache_key, {"backend":"triton", "hardware": self.hw.__dict__})
-                            return res
-                        if op_name == "relu":
-                            res = triton_relu(a)
-                            return res
-                except Exception:
-                    pass
-
-                # 3) Try OpenCL backend
-                try:
-                    if is_opencl_available():
-                        if op_name == "matmul":
-                            res = opencl_matmul(a, b)
-                            self.cache.set(cache_key, {"backend":"opencl", "hardware": self.hw.__dict__})
+                            res = torch_matmul(a, b)
+                            self.cache.set(cache_key, {"backend":"torch", "hardware": self.hw.__dict__})
                             return res
                         if op_name == "conv2d":
-                            res = opencl_conv2d(a, b, stride=kwargs.get("stride",1), padding=kwargs.get("padding",0))
-                            self.cache.set(cache_key, {"backend":"opencl", "hardware": self.hw.__dict__})
+                            res = torch_conv2d(a, b, stride=kwargs.get("stride",1), padding=kwargs.get("padding",0))
+                            self.cache.set(cache_key, {"backend":"torch", "hardware": self.hw.__dict__})
                             return res
                         if op_name == "relu":
-                            res = opencl_relu(a)
+                            res = torch_relu(a)
+                            self.cache.set(cache_key, {"backend":"torch", "hardware": self.hw.__dict__})
                             return res
                 except Exception:
                     pass
