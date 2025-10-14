@@ -19,7 +19,7 @@ if _OPENCL_AVAILABLE:
     # Global context/queue and cached programs/kernels (per device)
     _CTX = None
     _Q = None
-    _PRG_CACHE = {}  # key: (device_name, BLOCK) -> (program, k_matmul, k_relu)
+    _PRG_CACHE = {}  # key: (device_name, BLOCK) -> (program, k_matmul, k_relu, k_conv2d_relu)
     _TUNED = {}      # key: device_name -> chosen BLOCK
     _DEVICE_INDEX = None  # Optional: global GPU device ordinal across all platforms
 
@@ -60,6 +60,46 @@ if _OPENCL_AVAILABLE:
             float v = A[i];
             Out[i] = v > 0.0f ? v : 0.0f;
         }
+    }
+
+    // Fused Conv2D + ReLU
+    // NCHW input, OIHW weights (Cout, Cin, KH, KW), stride=1/2, padding>=0
+    __kernel void conv2d_relu(
+        const int N, const int Cin, const int H, const int W,
+        const int Cout, const int KH, const int KW,
+        const int outH, const int outW,
+        const int stride, const int padding,
+        __global const float* Input,    // shape: N*C*H*W
+        __global const float* Weight,   // shape: Cout*Cin*KH*KW
+        __global float* Output          // shape: N*Cout*outH*outW
+    ) {
+        // Use 3D NDRange: (x: outW, y: outH, z: N*Cout)
+        int x = get_global_id(0);
+        int y = get_global_id(1);
+        int z = get_global_id(2);
+        if (x >= outW || y >= outH) return;
+        int n = z / Cout;
+        int co = z % Cout;
+        if (n >= N) return;
+
+        float acc = 0.0f;
+        for (int ci = 0; ci < Cin; ++ci) {
+            for (int ky = 0; ky < KH; ++ky) {
+                for (int kx = 0; kx < KW; ++kx) {
+                    int iy = y * stride - padding + ky;
+                    int ix = x * stride - padding + kx;
+                    if (iy >= 0 && iy < H && ix >= 0 && ix < W) {
+                        int in_idx = ((n * Cin + ci) * H + iy) * W + ix;
+                        int w_idx  = ((co * Cin + ci) * KH + ky) * KW + kx;
+                        acc += Input[in_idx] * Weight[w_idx];
+                    }
+                }
+            }
+        }
+        // ReLU
+        if (acc < 0.0f) acc = 0.0f;
+        int out_idx = ((n * Cout + co) * outH + y) * outW + x;
+        Output[out_idx] = acc;
     }
     """
 
@@ -140,7 +180,13 @@ if _OPENCL_AVAILABLE:
         prg = cl.Program(ctx, src).build()
         k_mm = cl.Kernel(prg, "matmul_tiled")
         k_relu = cl.Kernel(prg, "relu")
-        _PRG_CACHE[key] = (prg, k_mm, k_relu)
+        # conv2d_relu may fail to build on very old drivers; guard creation
+        cl_k_conv = None
+        try:
+            cl_k_conv = cl.Kernel(prg, "conv2d_relu")
+        except Exception:
+            cl_k_conv = None
+        _PRG_CACHE[key] = (prg, k_mm, k_relu, cl_k_conv)
         return _PRG_CACHE[key]
 
     def _ensure_tuned_program():
@@ -157,7 +203,7 @@ if _OPENCL_AVAILABLE:
         best_b = 16
         for b in candidates:
             try:
-                _, k_mm, _ = _get_or_build_program(b)
+                _, k_mm, _, _ = _get_or_build_program(b)
                 m = n = k = b * 32  # e.g., 256 or 512
                 A = _np.random.rand(m, k).astype(_np.float32)
                 B = _np.random.rand(k, n).astype(_np.float32)
@@ -187,7 +233,7 @@ if _OPENCL_AVAILABLE:
     def opencl_matmul(a, b):
         import numpy as _np
         ctx, q = _ensure_ctx_queue()
-        _, _K_MATMUL, _, BLOCK = _ensure_tuned_program()
+        _, _K_MATMUL, _, _, BLOCK = _ensure_tuned_program()
         a = _np.array(a, dtype=_np.float32)
         b = _np.array(b, dtype=_np.float32)
         m, k = a.shape
@@ -210,7 +256,7 @@ if _OPENCL_AVAILABLE:
     def opencl_relu(x):
         import numpy as _np
         ctx, q = _ensure_ctx_queue()
-        _, _, _K_RELU, _ = _ensure_tuned_program()
+        _, _, _K_RELU, _, _ = _ensure_tuned_program()
         x = _np.array(x, dtype=_np.float32).ravel()
         out = _np.empty_like(x)
         mf = cl.mem_flags
@@ -223,28 +269,71 @@ if _OPENCL_AVAILABLE:
         return out.reshape(-1)  # caller should reshape
 
     def opencl_conv2d(input_np, weight_np, stride=1, padding=0):
-        # Correctness-first CPU fallback to ensure functionality on all OpenCL-capable machines.
+        # Correctness-first CPU fallback retained; prefer GPU path via fused conv2d+relu when feasible.
         import numpy as _np
         N, C, H, W = input_np.shape
         Cout, Cin, KH, KW = weight_np.shape
-        outH = H - KH + 1
-        outW = W - KW + 1
+        assert C == Cin
+        if stride != 1 and stride != 2:
+            raise ValueError("opencl_conv2d currently supports stride 1 or 2")
+        outH = (H + 2*padding - KH) // stride + 1
+        outW = (W + 2*padding - KW) // stride + 1
         out = _np.zeros((N, Cout, outH, outW), dtype=_np.float32)
         for n in range(N):
             for co in range(Cout):
                 for y in range(outH):
                     for x in range(outW):
-                        s = 0.0
+                        float_acc = 0.0
                         for ci in range(Cin):
                             for ky in range(KH):
                                 for kx in range(KW):
-                                    s += input_np[n, ci, y+ky, x+kx] * weight_np[co, ci, ky, kx]
-                        out[n, co, y, x] = s
+                                    int_iy = y*stride - padding + ky
+                                    int_ix = x*stride - padding + kx
+                                    if 0 <= int_iy < H and 0 <= int_ix < W:
+                                        float_acc += input_np[n, ci, int_iy, int_ix] * weight_np[co, ci, ky, kx]
+                        out[n, co, y, x] = float_acc
         return out
+
+    def opencl_conv2d_relu(input_np, weight_np, stride=1, padding=0):
+        """Conv2D+ReLU using im2col + OpenCL matmul + OpenCL relu.
+        Falls back to CPU conv if OpenCL matmul is unavailable.
+        """
+        import numpy as _np
+        x = _np.array(input_np, dtype=_np.float32, copy=False)
+        w = _np.array(weight_np, dtype=_np.float32, copy=False)
+        N, C, H, W = x.shape
+        Cout, Cin, KH, KW = w.shape
+        assert C == Cin, "Cin mismatch"
+        outH = (H + 2*padding - KH) // stride + 1
+        outW = (W + 2*padding - KW) // stride + 1
+        # im2col with sliding_window_view for efficiency
+        try:
+            from numpy.lib.stride_tricks import sliding_window_view
+            if padding > 0:
+                x_pad = _np.pad(x, ((0,0),(0,0),(padding,padding),(padding,padding)), mode='constant')
+            else:
+                x_pad = x
+            windows = sliding_window_view(x_pad, (KH, KW), axis=(2,3))  # (N, C, outH, outW, KH, KW)
+            windows = windows[:, :, ::stride, ::stride, :, :]
+            X_col = windows.reshape(N*outH*outW, C*KH*KW)
+            W_col = w.reshape(Cout, C*KH*KW).T  # (C*KH*KW, Cout)
+            # GPU matmul
+            Y_col = opencl_matmul(X_col, W_col)  # (N*outH*outW, Cout)
+            # ReLU on GPU
+            Y_col = opencl_relu(Y_col.reshape(-1)).reshape(N*outH*outW, Cout)
+            out = Y_col.reshape(N, outH, outW, Cout).transpose(0,3,1,2)
+            return out
+        except Exception:
+            # Fallback: CPU conv then ReLU
+            out = opencl_conv2d(input_np, weight_np, stride=stride, padding=padding)
+            out = _np.maximum(out, 0.0, out)
+            return out
 else:
     def opencl_matmul(*args, **kwargs):
         raise RuntimeError("pyopencl not available")
     def opencl_relu(*args, **kwargs):
         raise RuntimeError("pyopencl not available")
     def opencl_conv2d(*args, **kwargs):
+        raise RuntimeError("pyopencl not available")
+    def opencl_conv2d_relu(*args, **kwargs):
         raise RuntimeError("pyopencl not available")

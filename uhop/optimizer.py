@@ -28,7 +28,7 @@ from .ai_codegen.generator import AICodegen
 from .backends import (
     is_torch_available, torch_matmul, torch_conv2d, torch_relu,
     is_triton_available, triton_matmul, triton_conv2d, triton_relu,
-    is_opencl_available, opencl_matmul, opencl_conv2d, opencl_relu,
+    is_opencl_available, opencl_matmul, opencl_conv2d, opencl_conv2d_relu, opencl_relu,
 )
 from .backends.torch_backend import torch_has_accelerator
 
@@ -41,10 +41,12 @@ class UHopOptimizer:
         self.codegen = AICodegen()
         # detect optional runtimes
         try:
-            import pycuda  # noqa: F401
+            import pycuda  # type: ignore  # noqa: F401
             self._pycuda_available = True
         except Exception:
             self._pycuda_available = False
+        # cache for compiled AI OpenCL programs
+        self._ai_opencl_cache = {}
 
     # Helper to import python module by path and call function
     def _import_and_call(self, path: str, fn_name: str, *args):
@@ -58,8 +60,8 @@ class UHopOptimizer:
     def _run_cuda_source_via_pycuda(self, source_path: Path, kernel_name: str, a: np.ndarray, b: Optional[np.ndarray] = None):
         if not self._pycuda_available:
             raise RuntimeError("pycuda not available")
-        from pycuda.compiler import SourceModule
-        import pycuda.driver as cuda
+        from pycuda.compiler import SourceModule  # type: ignore
+        import pycuda.driver as cuda  # type: ignore
         import numpy as _np
         src = source_path.read_text()
         mod = SourceModule(src)
@@ -82,6 +84,56 @@ class UHopOptimizer:
         grid = ((K + block[0] - 1) // block[0], (N + block[1] - 1) // block[1])
         func(A_gpu, B_gpu, C_gpu, np.int32(N), np.int32(M), np.int32(K), block=block, grid=grid)
         cuda.memcpy_dtoh(C, C_gpu)
+        return C
+
+    def _run_opencl_generated_matmul(self, source_path: Path, kernel_name: str, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        """Compile and run an AI-generated OpenCL matmul kernel with signature:
+        __kernel void generated_matmul(const int M, const int N, const int K,
+                                       __global const float* A,
+                                       __global const float* B,
+                                       __global float* C);
+        """
+        import numpy as _np
+        try:
+            import pyopencl as cl  # type: ignore
+        except Exception as e:
+            raise RuntimeError(f"pyopencl not available for ai_opencl backend: {e}")
+        a = _np.array(a, dtype=_np.float32)
+        b = _np.array(b, dtype=_np.float32)
+        M, K = a.shape
+        K2, N = b.shape
+        assert K == K2
+        C = _np.empty((M, N), dtype=_np.float32)
+        # compile/cache
+        cache_key = (str(source_path), kernel_name)
+        entry = self._ai_opencl_cache.get(cache_key)
+        if entry is None:
+            src = Path(source_path).read_text()
+            # Prefer a GPU device
+            plats = cl.get_platforms()
+            ctx = None
+            for p in plats:
+                gpus = [d for d in p.get_devices() if d.type & cl.device_type.GPU]
+                if gpus:
+                    ctx = cl.Context(devices=[gpus[0]])
+                    break
+            if ctx is None:
+                ctx = cl.create_some_context(interactive=False)
+            q = cl.CommandQueue(ctx)
+            prg = cl.Program(ctx, src).build()
+            kn = cl.Kernel(prg, kernel_name)
+            entry = (ctx, q, prg, kn)
+            self._ai_opencl_cache[cache_key] = entry
+        ctx, q, prg, kn = entry
+        mf = cl.mem_flags
+        a_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=a)
+        b_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=b)
+        c_buf = cl.Buffer(ctx, mf.WRITE_ONLY, C.nbytes)
+        kn.set_args(_np.int32(M), _np.int32(N), _np.int32(K), a_buf, b_buf, c_buf)
+        gsz = (int(M), int(N))
+        cl.enqueue_nd_range_kernel(q, kn, gsz, None)
+        cl.enqueue_copy(q, C, c_buf)
+        q.finish()
         return C
 
     def optimize(self, op_name: str, sandbox_timeout: int = 8):
@@ -130,6 +182,12 @@ class UHopOptimizer:
                             path = rec.get("path")
                             kernel_name = rec.get("kernel_name", f"{op_name}_kernel")
                             return self._run_cuda_source_via_pycuda(Path(path), kernel_name, a, b)
+                        if backend == "ai_opencl":
+                            path = rec.get("path")
+                            kernel_name = rec.get("kernel_name", f"generated_{op_name}")
+                            if op_name == "matmul" and path:
+                                return self._run_opencl_generated_matmul(Path(path), kernel_name, a, b)
+                            # other ops not yet supported via ai_opencl cached path; fall through
                         if backend == "ai_python":
                             path = rec.get("path")
                             fn_name = rec.get("function", f"generated_{op_name}")
@@ -161,6 +219,10 @@ class UHopOptimizer:
                             return res
                         if op_name == "conv2d":
                             res = opencl_conv2d(a, b, stride=kwargs.get("stride",1), padding=kwargs.get("padding",0))
+                            self.cache.set(cache_key, {"backend":"opencl", "hardware": self.hw.__dict__})
+                            return res
+                        if op_name == "conv2d_relu":
+                            res = opencl_conv2d_relu(a, b, stride=kwargs.get("stride",1), padding=kwargs.get("padding",0))
                             self.cache.set(cache_key, {"backend":"opencl", "hardware": self.hw.__dict__})
                             return res
                         if op_name == "relu":

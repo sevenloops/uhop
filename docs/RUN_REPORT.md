@@ -1,4 +1,4 @@
-# UHOP: Windows + AMD GPU Run Report
+# UHOP: Windows + AMD GPU Run Report (updated Oct 14, 2025)
 
 This document captures the issues we hit, how we fixed them, and the concrete outputs/metrics from examples and tests on this system.
 
@@ -51,6 +51,30 @@ This document captures the issues we hit, how we fixed them, and the concrete ou
 - Several `IndentationError` and unexpected indent issues while editing.
 - Fix: Cleaned up `opencl_backend.py` indentation, kept all kernel launch logic inside function scope, and validated with runs.
 
+- OpenAI SDK mismatch and env loading
+
+  - Issue: Generator used legacy OpenAI SDK usage; API key not loaded when running via CLI.
+  - Fixes:
+    - Migrated generator to OpenAI Python SDK v1 (chat.completions).
+    - CLI auto-loads .env (from CWD or repo root) to set OPENAI_API_KEY and related env.
+
+- AI code extraction unreliable for OpenCL
+
+  - Issue: Some completions wrapped code in ```opencl fences; our extractor didn’t recognize them.
+  - Fix: Updated extractor to recognize ```opencl code blocks in addition to cuda/c/py.
+
+- Smoke-test gaps and missing reproducibility
+
+  - Issue: Only matmul had a simple smoke test; no manifest captured model/prompt/selection.
+  - Fixes:
+    - Added smoke tests for OpenCL ReLU (1D) and Conv2D (NCHW) with reference checks.
+    - Wrote a manifest JSON (ai_\<op\>_manifest.json) logging: operation, target, model, prompt, created_at, per-candidate Linf/time, and the selected best.
+
+- Optimizer didn’t reuse AI-generated kernels
+
+  - Issue: After selecting a best candidate, subsequent runs didn’t benefit automatically.
+  - Fix: CLI now auto-caches the best OpenCL matmul candidate into ~/.uhop_mvp_cache/index.json; optimizer recognizes backend=ai_opencl and runs the saved kernel.
+
 ## Backend and policy improvements
 
 - GPU-first dispatch policy: Optimizer now prefers GPU backends by order:
@@ -65,26 +89,59 @@ This document captures the issues we hit, how we fixed them, and the concrete ou
   - Tiled matmul with local memory (BLOCK tuned via autotuner per device).
   - Program and kernel object caching.
   - GPU device selection without interactive prompts.
+  - ReLU kernel and a fused Conv2D+ReLU path via im2col + matmul + relu on OpenCL.
+  - Fused Conv2D+ReLU CLI demo available; larger shapes recommended for clearer GPU wins.
+
+## AI code generation pipeline (new)
+
+- CLI: `python -m uhop.cli ai-generate <op> --target opencl --validate --smoke --samples N`
+  - Supports matmul, relu, conv2d (OpenCL).
+  - Compiles OpenCL sources and runs smoke tests with Linf/time reporting.
+  - Writes a manifest `uhop/generated_kernels/ai_<op>_manifest.json` with prompt and selection.
+  - For matmul: best candidate is auto-cached for the optimizer as backend=ai_opencl.
+
+### Example manifest snippet
+
+```json
+{
+  "operation": "matmul",
+  "target": "opencl",
+  "model": "gpt-4o-mini",
+  "prompt": "Produce a single OpenCL C kernel ...",
+  "created_at": "2025-10-14T15:02:43Z",
+  "candidates": [
+    {"path": ".../ai_matmul_cand1.cl", "linf": 9.5e-07, "time": 0.00565},
+    {"path": ".../ai_matmul_cand2.cl", "linf": 8.1e-07, "time": 0.00352}
+  ],
+  "selected": ".../ai_matmul_cand2.cl"
+}
+```
 
 ## Example outputs (latest runs)
 
 All runs used venv Python unless otherwise noted.
 
+
 ### 1) UHOP vs naive Python (matmul)
+
 - Command: `PYTHONPATH=. .venv/Scripts/python.exe examples/compare_python_naive_vs_uhop.py`
 - Output:
   - UHOP (optimized over naive): ~0.001 s median
   - Naive Python baseline: ~10.877 s median
   - Result: UHOP wins ✅ (orders of magnitude faster)
 
+
 ### 2) UHOP vs baseline (Conv2D parity)
+
 - Command: `PYTHONPATH=. python examples/compare_uhop_vs_baseline.py` (ran earlier with system python; same result with venv)
 - Outputs (two runs during iteration):
   - Before forward update: Baseline loss=1.270956, median ~0.0015 s; UHOP loss=1.270956, median ~0.0028 s
   - After forward uses torch.conv2d: Baseline loss=1.270956, median ~0.0015 s; UHOP loss=1.270956, median ~0.0023 s
 - Result: Loss parity identical; UHOP wrapper adds small overhead on CPU.
 
+
 ### 3) Training demos (10 steps)
+
 - UHOP training (`examples/train_cnn_uhop.py`) losses:
   - 28.425049, 28.576725, 26.715187, 27.565796, 27.236261,
     27.131676, 26.492235, 27.956526, 28.125742, 25.770393
@@ -94,6 +151,7 @@ All runs used venv Python unless otherwise noted.
 - Note: Different initialization schemes originally caused loss scale differences. After aligning init (Kaiming uniform) and using torch conv2d forward, parity holds. The demo above shows values from the earlier run before full alignment.
 
 ### 4) GPU-preferred matmul benchmark (`examples/bench_matmul_gpu_pref.py`)
+
 - Results across iterations during tuning:
   - Initial: UHOP ~0.4116 s, NumPy ~0.0088 s (NumPy faster)
   - After caching + BLOCK tweak: UHOP ~0.0501 s, NumPy ~0.0078 s
@@ -101,12 +159,14 @@ All runs used venv Python unless otherwise noted.
 - Takeaway: CPU BLAS is strong for matmul; more tuning/persistent buffers are needed to consistently beat it for these sizes.
 
 ### 5) GPU ReLU benchmark (`examples/bench_relu_gpu_pref.py`)
+
 - Output:
   - UHOP (OpenCL) ReLU: ~0.5267 s median
   - NumPy CPU ReLU: ~0.1453 s median
 - Takeaway: Memory-bound; without persistent residency or fusing, CPU can win on this single-op scenario.
 
 ### 6) Device report (`examples/show_devices.py`)
+
 - Output:
   - OpenCL platforms: 1
     - Platform 0: AMD Accelerated Parallel Processing
@@ -114,7 +174,7 @@ All runs used venv Python unless otherwise noted.
 
 ## Tests summary
 
-- Latest: `5 passed in 3.70s`
+- Latest (venv): `5 passed in 4.63s`
   - tests/test_cpu_flow.py (NumPy matmul correctness)
   - tests/test_matmul.py (decorated matmul correctness)
   - tests/test_pytorch_conv_grad.py (UHOP autograd backward matches torch)
@@ -124,11 +184,19 @@ All runs used venv Python unless otherwise noted.
 
 ## Recommendations / Next steps
 
-- Fused kernels: Implement OpenCL fused Conv2D+ReLU to reduce launch/memory overhead.
-- Persistent residency: Keep tensors on device across kernels for benchmarks; amortize host<->device transfers.
-- Expanded autotuner: Explore BLOCK in {8,16,32} per device limits and cache per shape.
-- Stream/queue pipelining: Overlap transfers with compute where applicable.
-- Single CLI demo: `uhop demo` that prints detected device, runs the naive-vs-UHOP win, and (if enabled) a fused Conv2D+ReLU comparison.
+- Optimizer wiring:
+  - Extend ai_opencl cache support to ReLU and Conv2D, similar to matmul.
+  - Persist selected kernel metadata per device/shape where applicable.
+- Performance engineering:
+  - Persistent residency: keep inputs on device; chain ops without host copies.
+  - Broader autotuning space (BLOCK, vector width, unrolling) with per-shape caching.
+  - Overlap transfers with compute via multiple queues.
+- AI codegen:
+  - Add more targets (CUDA/Triton) with smoke tests and manifests.
+  - Generation manifest enhancements: include timings for validation runs and errors if any.
+- Demos and docs:
+  - Document the new ai-generate flow; add examples for relu/conv2d smoke tests.
+  - Include tips on device selection (--ocl-device or UHOP_OPENCL_DEVICE_INDEX).
 
 ---
 

@@ -1,4 +1,6 @@
 import time
+import os
+from pathlib import Path
 import click
 import numpy as np
 from rich.console import Console
@@ -10,7 +12,12 @@ from .backends import (
     is_opencl_available,
 )
 from .backends.opencl_backend import set_opencl_device as _set_opencl_device
+from .backends.opencl_backend import opencl_conv2d_relu as _ocl_conv2d_relu
 from . import optimize
+from .ai_codegen import AICodegen
+from .cache import UhopCache as _UhopCache
+from datetime import datetime as _dt
+import json as _json
 
 console = Console()
 
@@ -26,6 +33,32 @@ def _hardware_summary() -> str:
         f"OpenCL available: {is_opencl_available()}",
     ]
     return "\n".join(lines)
+
+
+def _load_env():
+    # Load environment variables from a .env file if present
+    root = Path(__file__).resolve().parents[1]  # repo root (uhop/)
+    candidates = [
+        Path.cwd() / ".env",
+        root / ".env",
+    ]
+    for p in candidates:
+        try:
+            if p.exists():
+                for line in p.read_text().splitlines():
+                    s = line.strip()
+                    if not s or s.startswith("#"):
+                        continue
+                    if "=" in s:
+                        k, v = s.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip('"').strip("'")
+                        if k and v and k not in os.environ:
+                            os.environ[k] = v
+        except Exception:
+            continue
+
+_load_env()
 
 
 @click.group()
@@ -189,6 +222,480 @@ def demo(size: int, iters: int, ocl_device: int | None):
         console.print("[green]UHOP wins ✅[/green]")
     else:
         console.print("[yellow]Baseline was faster in this config. Try larger size or check GPU drivers.[/yellow]")
+
+
+@main.command(name="demo-conv2d-relu")
+@click.option("--n", default=1, show_default=True, help="Batch size N.")
+@click.option("--c-in", default=3, show_default=True, help="Input channels.")
+@click.option("--c-out", default=16, show_default=True, help="Output channels.")
+@click.option("--h", default=64, show_default=True, help="Input height.")
+@click.option("--w", default=64, show_default=True, help="Input width.")
+@click.option("--k", default=3, show_default=True, help="Kernel size (square).")
+@click.option("--stride", default=1, show_default=True, help="Stride.")
+@click.option("--padding", default=1, show_default=True, help="Padding.")
+@click.option("--iters", default=2, show_default=True, help="Median timing iterations for UHOP path.")
+@click.option("--ocl-device", type=int, default=None, help="OpenCL GPU device index override (across all platforms).")
+def demo_conv2d_relu(n: int, c_in: int, c_out: int, h: int, w: int, k: int, stride: int, padding: int, iters: int, ocl_device: int | None):
+    """Benchmark fused Conv2D+ReLU (OpenCL) vs CPU baselines (naive loops and torch CPU)."""
+    console.print("[bold cyan]UHOP Fused Conv2D+ReLU Demo[/bold cyan]")
+    if ocl_device is not None:
+        try:
+            _set_opencl_device(ocl_device)
+        except Exception as e:
+            console.print(f"[yellow]Warning:[/yellow] could not set OpenCL device index {ocl_device}: {e}")
+    console.print(_hardware_summary())
+
+    import numpy as np
+    rng = np.random.default_rng(0)
+    x = rng.random((n, c_in, h, w), dtype=np.float32)
+    wgt = rng.random((c_out, c_in, k, k), dtype=np.float32)
+
+    # UHOP fused path (OpenCL)
+    def _med(run, iters=iters):
+        times = []
+        for _ in range(iters):
+            t0 = time.perf_counter()
+            run()
+            times.append(time.perf_counter() - t0)
+        return float(np.median(times))
+
+    # Warm-up
+    _ = _ocl_conv2d_relu(x, wgt, stride=stride, padding=padding)
+    t_uhop = _med(lambda: _ocl_conv2d_relu(x, wgt, stride=stride, padding=padding))
+
+    # Baseline 1: naive CPU loops (may be slow, do single iteration)
+    def _conv2d_relu_naive(inp, wt):
+        N, C, H, W = inp.shape
+        Cout, Cin, KH, KW = wt.shape
+        assert C == Cin
+        outH = (H + 2*padding - KH) // stride + 1
+        outW = (W + 2*padding - KW) // stride + 1
+        out = np.zeros((N, Cout, outH, outW), dtype=np.float32)
+        for n_i in range(N):
+            for co in range(Cout):
+                for y_o in range(outH):
+                    for x_o in range(outW):
+                        s = 0.0
+                        for ci in range(Cin):
+                            for ky in range(KH):
+                                for kx in range(KW):
+                                    iy = y_o*stride - padding + ky
+                                    ix = x_o*stride - padding + kx
+                                    if 0 <= iy < H and 0 <= ix < W:
+                                        s += inp[n_i, ci, iy, ix] * wt[co, ci, ky, kx]
+                        out[n_i, co, y_o, x_o] = s if s > 0.0 else 0.0
+        return out
+
+    t_naive = _med(lambda: _conv2d_relu_naive(x, wgt), iters=1)
+
+    # Baseline 2: torch CPU
+    t_torch = None
+    try:
+        import torch
+        import torch.nn.functional as F
+        xt = torch.from_numpy(x)
+        wt = torch.from_numpy(wgt)
+        def _run_torch():
+            y = F.conv2d(xt, wt, stride=stride, padding=padding)
+            y = F.relu(y)
+            return y
+        # warm
+        _ = _run_torch()
+        t_torch = _med(_run_torch)
+    except Exception as e:
+        console.print(f"[yellow]Torch baseline unavailable: {e}")
+
+    console.print(f"UHOP fused Conv2D+ReLU: [bold]{t_uhop:.6f} s[/bold]")
+    console.print(f"Naive CPU baseline    : [bold]{t_naive:.6f} s[/bold]")
+    if t_torch is not None:
+        console.print(f"Torch CPU baseline    : [bold]{t_torch:.6f} s[/bold]")
+    if t_uhop < t_naive:
+        console.print("[green]UHOP beats naive ✅[/green]")
+    else:
+        console.print("[yellow]Naive was faster at this size. Try larger H/W or channels.[/yellow]")
+
+
+@main.command(name="ai-generate")
+@click.argument("operation")
+@click.option("--target", type=click.Choice(["cuda","opencl","python","triton"], case_sensitive=False), default="opencl", show_default=True)
+@click.option("--validate", is_flag=True, help="Attempt to validate generated code (syntax for python, build for opencl).")
+@click.option("--smoke", is_flag=True, help="Run a small correctness+timing smoke test vs NumPy.")
+@click.option("--temperature", default=0.0, show_default=True, help="Sampling temperature for generation.")
+@click.option("--samples", default=1, show_default=True, type=int, help="If >1, generate multiple candidates and benchmark (OpenCL matmul only).")
+def ai_generate(operation: str, target: str, validate: bool, smoke: bool, temperature: float, samples: int):
+    """Generate a kernel with AI for OPERATION and TARGET, and save to generated_kernels/.
+
+    Example:
+      python -m uhop.cli ai-generate matmul --target opencl --validate
+    """
+    console.print(f"[bold cyan]AI Codegen[/bold cyan] — operation={operation}, target={target}")
+    gen = AICodegen()
+    if samples <= 1:
+        try:
+            path = gen.generate(operation, target=target, temperature=temperature)
+            console.print(f"Saved generated code to: [bold]{path}[/bold]")
+        except Exception as e:
+            console.print(f"[red]Generation failed:[/red] {e}")
+            return
+        paths = [path]
+    else:
+        # Multi-candidate generation for OpenCL matmul only (bench fastest)
+        paths = []
+        for i in range(samples):
+            try:
+                p = gen.generate(operation, target=target, temperature=temperature, suffix=f"_cand{i+1}")
+                console.print(f"Saved candidate #{i+1}: [bold]{p}[/bold]")
+                paths.append(p)
+            except Exception as e:
+                console.print(f"[yellow]Candidate {i+1} failed:[/yellow] {e}")
+        if not paths:
+            console.print("[red]No successful candidates generated.[/red]")
+            return
+
+    if not validate:
+        return
+
+    if target.lower() == "python":
+        # Syntax validation already performed in generator; import to ensure it's importable
+        try:
+            import importlib.util, sys
+            spec = importlib.util.spec_from_file_location("uhop.generated_kernels.ai_generated", str(path))
+            mod = importlib.util.module_from_spec(spec)
+            assert spec and spec.loader
+            spec.loader.exec_module(mod)  # type: ignore
+            console.print("[green]Python code imported successfully.[/green]")
+        except Exception as e:
+            console.print(f"[red]Import failed:[/red] {e}")
+    elif target.lower() == "opencl":
+        # Try to compile OpenCL source to catch obvious errors
+        try:
+            import pyopencl as cl
+            ctx, q = _ensure_opencl_context_for_validation()
+            built = []
+            for pth in paths:
+                src = Path(pth).read_text()
+                prg = cl.Program(ctx, src).build()
+                built.append((pth, prg))
+            console.print("[green]OpenCL program(s) built successfully.[/green]")
+        except Exception as e:
+            console.print(f"[red]OpenCL build failed:[/red] {e}")
+            return
+
+    if smoke:
+        import numpy as np
+        if operation.lower() == "matmul":
+            A = np.random.RandomState(0).rand(32, 16).astype(np.float32)
+            B = np.random.RandomState(1).rand(16, 24).astype(np.float32)
+            ref = A @ B
+            if target.lower() == "python":
+                try:
+                    import importlib.util
+                    spec = importlib.util.spec_from_file_location("uhop.generated_kernels.ai_generated", str(path))
+                    mod = importlib.util.module_from_spec(spec)
+                    assert spec and spec.loader
+                    spec.loader.exec_module(mod)  # type: ignore
+                    fn = getattr(mod, f"generated_{operation}")
+                    out = fn(A, B)
+                    err = float(np.max(np.abs(out - ref)))
+                    console.print(f"Smoke diff (Linf): {err:.3e}")
+                except Exception as e:
+                    console.print(f"[red]Smoke test failed:[/red] {e}")
+            elif target.lower() == "opencl":
+                try:
+                    import pyopencl as cl
+                    from time import perf_counter
+                    ctx, q = _ensure_opencl_context_for_validation()
+                    results = []
+                    for pth in paths:
+                        src = Path(pth).read_text()
+                        prg = cl.Program(ctx, src).build()
+                        M, K = A.shape
+                        K2, N = B.shape
+                        assert K == K2
+                        C = np.empty((M, N), dtype=np.float32)
+                        mf = cl.mem_flags
+                        a_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=A)
+                        b_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=B)
+                        c_buf = cl.Buffer(ctx, mf.WRITE_ONLY, C.nbytes)
+                        kn = cl.Kernel(prg, f"generated_{operation}")
+                        kn.set_args(np.int32(M), np.int32(N), np.int32(K), a_buf, b_buf, c_buf)
+                        gsz = (int(M), int(N))
+                        # warm
+                        cl.enqueue_nd_range_kernel(q, kn, gsz, None)
+                        q.finish()
+                        t0 = perf_counter()
+                        cl.enqueue_nd_range_kernel(q, kn, gsz, None)
+                        q.finish()
+                        cl.enqueue_copy(q, C, c_buf)
+                        q.finish()
+                        err = float(np.max(np.abs(C - ref)))
+                        dt = float(perf_counter() - t0)
+                        results.append((pth, err, dt))
+                        console.print(f"Candidate {pth.name}: Linf={err:.3e}, time={dt:.6f}s")
+                    # Pick best by time with acceptable error
+                    ok = [r for r in results if r[1] < 1e-3]
+                    if ok:
+                        best = min(ok, key=lambda r: r[2])
+                    else:
+                        best = min(results, key=lambda r: r[1])
+                    console.print(f"[bold]Selected best:[/bold] {best[0].name} (Linf={best[1]:.3e}, time={best[2]:.6f}s)")
+                    # Write manifest
+                    ai_dir = Path(paths[0]).parent
+                    manifest = {
+                        "operation": operation,
+                        "target": target,
+                        "model": gen.model,
+                        "prompt": gen.last_prompt,
+                        "created_at": _dt.utcnow().isoformat() + "Z",
+                        "candidates": [
+                            {"path": str(pth), "linf": float(err), "time": float(dt)}
+                            for pth, err, dt in results
+                        ],
+                        "selected": str(best[0]),
+                    }
+                    (ai_dir / f"ai_{operation}_manifest.json").write_text(_json.dumps(manifest, indent=2))
+                    # Auto-cache best kernel for optimizer (matmul only)
+                    try:
+                        cache = _UhopCache()
+                        from .hardware import detect_hardware as _detect
+                        cache.set("matmul", {"backend": "ai_opencl", "path": str(best[0]), "kernel_name": f"generated_{operation}", "hardware": _detect().__dict__})
+                        console.print("[green]Cached best kernel for optimizer (ai_opencl/matmul).[/green]")
+                    except Exception as e:
+                        console.print(f"[yellow]Warning:[/yellow] could not cache kernel: {e}")
+                except Exception as e:
+                    console.print(f"[red]OpenCL smoke test failed:[/red] {e}")
+        elif operation.lower() == "relu" and target.lower() == "opencl":
+            try:
+                import pyopencl as cl
+                from time import perf_counter
+                ctx, q = _ensure_opencl_context_for_validation()
+                X = np.random.RandomState(0).randn(1_024).astype(np.float32)
+                ref = np.maximum(X, 0)
+                results = []
+                for pth in paths:
+                    src = Path(pth).read_text()
+                    prg = cl.Program(ctx, src).build()
+                    N = np.int32(X.size)
+                    Y = np.empty_like(X)
+                    mf = cl.mem_flags
+                    x_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=X)
+                    y_buf = cl.Buffer(ctx, mf.WRITE_ONLY, Y.nbytes)
+                    kn = cl.Kernel(prg, "generated_relu")
+                    kn.set_args(N, x_buf, y_buf)
+                    # warm
+                    cl.enqueue_nd_range_kernel(q, kn, (int(N),), None)
+                    q.finish()
+                    t0 = perf_counter()
+                    cl.enqueue_nd_range_kernel(q, kn, (int(N),), None)
+                    q.finish()
+                    cl.enqueue_copy(q, Y, y_buf)
+                    q.finish()
+                    err = float(np.max(np.abs(Y - ref)))
+                    dt = float(perf_counter() - t0)
+                    results.append((pth, err, dt))
+                    console.print(f"Candidate {pth.name}: Linf={err:.3e}, time={dt:.6f}s")
+                ok = [r for r in results if r[1] < 1e-6]
+                best = min(ok or results, key=lambda r: (r[2], r[1]))
+                console.print(f"[bold]Selected best:[/bold] {best[0].name} (Linf={best[1]:.3e}, time={best[2]:.6f}s)")
+                ai_dir = Path(paths[0]).parent
+                manifest = {
+                    "operation": operation,
+                    "target": target,
+                    "model": gen.model,
+                    "prompt": gen.last_prompt,
+                    "created_at": _dt.utcnow().isoformat() + "Z",
+                    "candidates": [
+                        {"path": str(pth), "linf": float(err), "time": float(dt)} for pth, err, dt in results
+                    ],
+                    "selected": str(best[0]),
+                }
+                (ai_dir / f"ai_{operation}_manifest.json").write_text(_json.dumps(manifest, indent=2))
+            except Exception as e:
+                console.print(f"[red]OpenCL ReLU smoke test failed:[/red] {e}")
+        elif operation.lower() == "conv2d" and target.lower() == "opencl":
+            try:
+                import pyopencl as cl
+                from time import perf_counter
+                ctx, q = _ensure_opencl_context_for_validation()
+                # Small config
+                N, C_in, H, W = 1, 3, 32, 32
+                C_out, KH, KW = 4, 3, 3
+                stride, pad = 1, 1
+                rng = np.random.default_rng(0)
+                X = rng.standard_normal((N, C_in, H, W), dtype=np.float32)
+                Wt = rng.standard_normal((C_out, C_in, KH, KW), dtype=np.float32)
+                outH = (H + 2*pad - KH)//stride + 1
+                outW = (W + 2*pad - KW)//stride + 1
+                # Reference via torch if available, else naive
+                try:
+                    import torch, torch.nn.functional as F
+                    ref = F.conv2d(torch.from_numpy(X), torch.from_numpy(Wt), stride=stride, padding=pad).numpy()
+                except Exception:
+                    ref = np.zeros((N, C_out, outH, outW), dtype=np.float32)
+                    for n in range(N):
+                        for co in range(C_out):
+                            for y in range(outH):
+                                for x in range(outW):
+                                    s = 0.0
+                                    for ci in range(C_in):
+                                        for ky in range(KH):
+                                            for kx in range(KW):
+                                                iy = y*stride - pad + ky
+                                                ix = x*stride - pad + kx
+                                                if 0 <= iy < H and 0 <= ix < W:
+                                                    s += X[n, ci, iy, ix] * Wt[co, ci, ky, kx]
+                                    ref[n, co, y, x] = s
+                results = []
+                for pth in paths:
+                    src = Path(pth).read_text()
+                    prg = cl.Program(ctx, src).build()
+                    mf = cl.mem_flags
+                    x_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=X.astype(np.float32))
+                    w_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=Wt.astype(np.float32))
+                    Y = np.empty((N, C_out, outH, outW), dtype=np.float32)
+                    y_buf = cl.Buffer(ctx, mf.WRITE_ONLY, Y.nbytes)
+                    kn = cl.Kernel(prg, "generated_conv2d")
+                    # args: N, C_in, H, W, C_out, KH, KW, stride, pad, input, weight, output, outH, outW
+                    kn.set_args(
+                        np.int32(N), np.int32(C_in), np.int32(H), np.int32(W),
+                        np.int32(C_out), np.int32(KH), np.int32(KW),
+                        np.int32(stride), np.int32(pad),
+                        x_buf, w_buf, y_buf,
+                        np.int32(outH), np.int32(outW)
+                    )
+                    gsz = (int(outW), int(outH), int(N*C_out))
+                    # warm
+                    cl.enqueue_nd_range_kernel(q, kn, gsz, None)
+                    q.finish()
+                    t0 = perf_counter()
+                    cl.enqueue_nd_range_kernel(q, kn, gsz, None)
+                    q.finish()
+                    cl.enqueue_copy(q, Y, y_buf)
+                    q.finish()
+                    err = float(np.max(np.abs(Y - ref)))
+                    dt = float(perf_counter() - t0)
+                    results.append((pth, err, dt))
+                    console.print(f"Candidate {pth.name}: Linf={err:.3e}, time={dt:.6f}s")
+                ok = [r for r in results if r[1] < 1e-2]
+                best = min(ok or results, key=lambda r: (r[2], r[1]))
+                console.print(f"[bold]Selected best:[/bold] {best[0].name} (Linf={best[1]:.3e}, time={best[2]:.6f}s)")
+                ai_dir = Path(paths[0]).parent
+                manifest = {
+                    "operation": operation,
+                    "target": target,
+                    "model": gen.model,
+                    "prompt": gen.last_prompt,
+                    "created_at": _dt.utcnow().isoformat() + "Z",
+                    "candidates": [
+                        {"path": str(pth), "linf": float(err), "time": float(dt)} for pth, err, dt in results
+                    ],
+                    "selected": str(best[0]),
+                }
+                (ai_dir / f"ai_{operation}_manifest.json").write_text(_json.dumps(manifest, indent=2))
+            except Exception as e:
+                console.print(f"[red]OpenCL Conv2D smoke test failed:[/red] {e}")
+
+
+def _ensure_opencl_context_for_validation():
+    try:
+        import pyopencl as cl
+        plats = cl.get_platforms()
+        for p in plats:
+            devs = [d for d in p.get_devices() if d.type & cl.device_type.GPU]
+            if devs:
+                ctx = cl.Context(devices=[devs[0]])
+                q = cl.CommandQueue(ctx)
+                return ctx, q
+        # fallback: any device
+        ctx = cl.create_some_context(interactive=False)
+        q = cl.CommandQueue(ctx)
+        return ctx, q
+    except Exception as e:
+        raise RuntimeError(f"No OpenCL context available: {e}")
+
+
+@main.command("demo-conv2d-relu")
+@click.option("--n", default=1, show_default=True, help="Batch size")
+@click.option("--c-in", default=3, show_default=True, help="Input channels")
+@click.option("--h", default=128, show_default=True, help="Input height")
+@click.option("--w", default=128, show_default=True, help="Input width")
+@click.option("--c-out", default=32, show_default=True, help="Output channels")
+@click.option("--k", default=3, show_default=True, help="Kernel size (square)")
+@click.option("--stride", default=1, show_default=True, type=int)
+@click.option("--padding", default=1, show_default=True, type=int)
+@click.option("--iters", default=3, show_default=True, type=int)
+@click.option("--ocl-device", type=int, default=None, help="OpenCL GPU device index override (across all platforms).")
+def demo_conv2d_relu(n, c_in, h, w, c_out, k, stride, padding, iters, ocl_device):
+    """Showcase fused Conv2D+ReLU vs separate CPU baseline."""
+    import numpy as np
+    from . import optimize
+    from time import perf_counter
+
+    console.print("[bold cyan]UHOP Demo — Conv2D+ReLU (fused)[/bold cyan]")
+    if ocl_device is not None:
+        try:
+            _set_opencl_device(ocl_device)
+        except Exception as e:
+            console.print(f"[yellow]Warning:[/yellow] could not set OpenCL device index {ocl_device}: {e}")
+    console.print(_hardware_summary())
+
+    # Baseline: CPU conv2d then ReLU (naive)
+    def conv2d_cpu(x_in, w, stride=1, padding=0):
+        N, C, H, W = x_in.shape
+        Cout, Cin, KH, KW = w.shape
+        assert C == Cin
+        outH = (H + 2*padding - KH) // stride + 1
+        outW = (W + 2*padding - KW) // stride + 1
+        out = np.zeros((N, Cout, outH, outW), dtype=np.float32)
+        for n in range(N):
+            for co in range(Cout):
+                for y in range(outH):
+                    for x_o in range(outW):
+                        s = 0.0
+                        for ci in range(Cin):
+                            for ky in range(KH):
+                                for kx in range(KW):
+                                    iy = y*stride - padding + ky
+                                    ix = x_o*stride - padding + kx
+                                    if 0 <= iy < H and 0 <= ix < W:
+                                        s += x_in[n, ci, iy, ix] * w[co, ci, ky, kx]
+                        out[n, co, y, x_o] = s
+        return out
+
+    def relu_cpu(x):
+        return np.maximum(x, 0.0)
+
+    @optimize("conv2d_relu")
+    def conv2d_relu_uhop(x, w, stride=1, padding=0):
+        # Fused op name hints UHOP to use OpenCL fused kernel when available
+        # Fallback will run baseline function if needed
+        out = conv2d_cpu(x, w, stride=stride, padding=padding)
+        return relu_cpu(out)
+
+    rng = np.random.default_rng(0)
+    x = rng.standard_normal((n, c_in, h, w), dtype=np.float32)
+    wgt = rng.standard_normal((c_out, c_in, k, k), dtype=np.float32)
+
+    # Warm-up UHOP path
+    _ = conv2d_relu_uhop(x, wgt, stride=stride, padding=padding)
+
+    def median_t(fn, repeats):
+        ts = []
+        for _ in range(repeats):
+            t0 = perf_counter()
+            fn()
+            ts.append(perf_counter() - t0)
+        return float(np.median(ts))
+
+    t_uhop = median_t(lambda: conv2d_relu_uhop(x, wgt, stride=stride, padding=padding), iters)
+    t_base = median_t(lambda: relu_cpu(conv2d_cpu(x, wgt, stride=stride, padding=padding)), 1)
+
+    console.print(f"UHOP fused Conv2D+ReLU: [bold]{t_uhop:.6f} s[/bold]")
+    console.print(f"CPU conv2d -> ReLU   : [bold]{t_base:.6f} s[/bold]")
+    if t_uhop < t_base:
+        console.print("[green]UHOP fused wins ✅[/green]")
+    else:
+        console.print("[yellow]Baseline was faster in this config. Try larger input or verify GPU drivers.[/yellow]")
 
 
 @main.command()
