@@ -30,7 +30,7 @@ After installing this package in your environment, you get a `uhop` command:
 
 Environment override: set `UHOP_OPENCL_DEVICE_INDEX=<idx>` to select a default OpenCL device for the session.
 
-## Wow demos
+## extra demos
 
 - MatMul (UHOP vs naive):
    - `uhop demo --size 192`
