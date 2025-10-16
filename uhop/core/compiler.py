@@ -9,7 +9,8 @@ If PyCUDA is available, SourceModule compiles the CUDA C source in-memory.
 import os
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
+import hashlib
 
 class NVCCCompiler:
     @staticmethod
@@ -28,6 +29,8 @@ class NVCCCompiler:
         return str(out)
 
 class CUDACompiler:
+    _registry: Dict[str, any] = {}
+
     @staticmethod
     def compile_via_pycuda(source_code: str):
         """
@@ -38,5 +41,9 @@ class CUDACompiler:
             from pycuda.compiler import SourceModule
         except Exception as e:
             raise ImportError("pycuda not available") from e
+        h = hashlib.sha1(source_code.encode("utf-8")).hexdigest()
+        if h in CUDACompiler._registry:
+            return CUDACompiler._registry[h]
         mod = SourceModule(source_code, no_extern_c=True)
+        CUDACompiler._registry[h] = mod
         return mod

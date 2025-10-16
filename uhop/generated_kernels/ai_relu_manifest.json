@@ -1,0 +1,20 @@
+{
+  "operation": "relu",
+  "target": "opencl",
+  "model": "gpt-4o-mini",
+  "prompt": "Produce a single OpenCL C kernel for ReLU.\nName the kernel generated_relu. Signature:\n__kernel void generated_relu(const int N, __global const float* X, __global float* Y);\nCompute Y[i] = max(X[i], 0). Bounds-check global id. Output only the code block.",
+  "created_at": "2025-10-14T19:29:49.726604Z",
+  "candidates": [
+    {
+      "path": "C:\\Users\\Miflow\\Documents\\GitHub\\sevenloops\\uhop\\uhop\\generated_kernels\\ai_relu_cand1.cl",
+      "linf": 0.0,
+      "time": 0.008228099992265925
+    },
+    {
+      "path": "C:\\Users\\Miflow\\Documents\\GitHub\\sevenloops\\uhop\\uhop\\generated_kernels\\ai_relu_cand2.cl",
+      "linf": 0.0,
+      "time": 0.0047771999961696565
+    }
+  ],
+  "selected": "C:\\Users\\Miflow\\Documents\\GitHub\\sevenloops\\uhop\\uhop\\generated_kernels\\ai_relu_cand2.cl"
+}

@@ -322,14 +322,15 @@ def demo_conv2d_relu(n: int, c_in: int, c_out: int, h: int, w: int, k: int, stri
 @click.option("--smoke", is_flag=True, help="Run a small correctness+timing smoke test vs NumPy.")
 @click.option("--temperature", default=0.0, show_default=True, help="Sampling temperature for generation.")
 @click.option("--samples", default=1, show_default=True, type=int, help="If >1, generate multiple candidates and benchmark (OpenCL matmul only).")
-def ai_generate(operation: str, target: str, validate: bool, smoke: bool, temperature: float, samples: int):
+@click.option("--model", default=None, show_default=False, help="Override OpenAI model (e.g., gpt-5.0). If omitted, uses UHOP_OPENAI_MODEL or generator default.")
+def ai_generate(operation: str, target: str, validate: bool, smoke: bool, temperature: float, samples: int, model: str | None):
     """Generate a kernel with AI for OPERATION and TARGET, and save to generated_kernels/.
 
     Example:
       python -m uhop.cli ai-generate matmul --target opencl --validate
     """
     console.print(f"[bold cyan]AI Codegen[/bold cyan] — operation={operation}, target={target}")
-    gen = AICodegen()
+    gen = AICodegen(model=model) if model else AICodegen()
     if samples <= 1:
         try:
             path = gen.generate(operation, target=target, temperature=temperature)
@@ -510,6 +511,14 @@ def ai_generate(operation: str, target: str, validate: bool, smoke: bool, temper
                     "selected": str(best[0]),
                 }
                 (ai_dir / f"ai_{operation}_manifest.json").write_text(_json.dumps(manifest, indent=2))
+                # Auto-cache best kernel for optimizer
+                try:
+                    cache = _UhopCache()
+                    from .hardware import detect_hardware as _detect
+                    cache.set("relu", {"backend": "ai_opencl", "path": str(best[0]), "kernel_name": "generated_relu", "hardware": _detect().__dict__})
+                    console.print("[green]Cached best kernel for optimizer (ai_opencl/relu).[/green]")
+                except Exception as e:
+                    console.print(f"[yellow]Warning:[/yellow] could not cache kernel: {e}")
             except Exception as e:
                 console.print(f"[red]OpenCL ReLU smoke test failed:[/red] {e}")
         elif operation.lower() == "conv2d" and target.lower() == "opencl":
@@ -592,8 +601,128 @@ def ai_generate(operation: str, target: str, validate: bool, smoke: bool, temper
                     "selected": str(best[0]),
                 }
                 (ai_dir / f"ai_{operation}_manifest.json").write_text(_json.dumps(manifest, indent=2))
+                # Auto-cache best kernel for optimizer
+                try:
+                    cache = _UhopCache()
+                    from .hardware import detect_hardware as _detect
+                    cache.set("conv2d", {"backend": "ai_opencl", "path": str(best[0]), "kernel_name": "generated_conv2d", "hardware": _detect().__dict__})
+                    console.print("[green]Cached best kernel for optimizer (ai_opencl/conv2d).[/green]")
+                except Exception as e:
+                    console.print(f"[yellow]Warning:[/yellow] could not cache kernel: {e}")
             except Exception as e:
                 console.print(f"[red]OpenCL Conv2D smoke test failed:[/red] {e}")
+
+
+@main.command(name="ai-generate-fused")
+@click.option("--stride", default=1, show_default=True, type=int)
+@click.option("--padding", default=0, show_default=True, type=int)
+@click.option("--temperature", default=0.0, show_default=True, type=float)
+@click.option("--model", default=None, show_default=False, help="Override OpenAI model (e.g., gpt-5.0). If omitted, uses UHOP_OPENAI_MODEL or generator default.")
+def ai_generate_fused(stride: int, padding: int, temperature: float, model: str | None):
+    """Generate a fused OpenCL Conv2D+ReLU kernel, benchmark vs current fused backend, and cache if good.
+
+    This uses the fused prompt template expectation (generated_conv2d_relu) and runs a small benchmark.
+    """
+    console.print("[bold cyan]AI Codegen — Fused Conv2D+ReLU[/bold cyan]")
+    from .ai_codegen.generator import AICodegen
+    gen = AICodegen(model=model) if model else AICodegen()
+    # Build a prompt using the fused template constants from prompt_templates (already imported in generator via prompt strings)
+    prompt_extra = (
+        "Produce a single OpenCL C kernel named conv2d_relu with signature:\n"
+        "__kernel void conv2d_relu(\n"
+        "    __global const float* input,   // [C_in,H_in,W_in]\n"
+        "    __global const float* weight,  // [C_out,C_in,KH,KW]\n"
+        "    __global const float* bias,    // [C_out]\n"
+        "    __global float* output,        // [C_out,H_out,W_out]\n"
+        "    const int C_in,const int H_in,const int W_in,\n"
+        "    const int C_out,const int KH,const int KW,\n"
+        "    const int stride,const int pad,const int N,\n"
+        "    const int H_out,const int W_out);\n"
+        "Assume N==1 for performance; use local size (8,8,1). Bounds-check and write valid OpenCL C."
+    )
+    try:
+        path = gen.generate("conv2d_relu", target="opencl", prompt_extra=prompt_extra, temperature=temperature)
+        console.print(f"Saved generated fused kernel to: [bold]{path}[/bold]")
+    except Exception as e:
+        console.print(f"[red]Generation failed:[/red] {e}")
+        return
+
+    # Compile and benchmark vs current backend fused path
+    try:
+        import pyopencl as cl
+        import numpy as np
+        from time import perf_counter
+        from .backends.opencl_backend import opencl_conv2d_relu as fused_baseline
+        ctx, q = _ensure_opencl_context_for_validation()
+        src = Path(path).read_text()
+        prg = cl.Program(ctx, src).build()
+        # Small test config
+        N, C_in, H, W = 1, 3, 64, 64
+        C_out, KH, KW = 8, 3, 3
+        rng = np.random.default_rng(0)
+        X = rng.random((N, C_in, H, W), dtype=np.float32)
+        Wt = rng.random((C_out, C_in, KH, KW), dtype=np.float32)
+        bias = np.zeros((C_out,), dtype=np.float32)
+        outH = (H + 2*padding - KH)//stride + 1
+        outW = (W + 2*padding - KW)//stride + 1
+        # Reference via baseline fused path
+        ref = fused_baseline(X, Wt, stride=stride, padding=padding)
+        # Prepare OpenCL buffers
+        mf = cl.mem_flags
+        inp = X[0]  # [C_in,H,W]
+        in_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=inp)
+        w_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=Wt)
+        b_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=bias)
+        Y = np.empty((C_out, outH, outW), dtype=np.float32)
+        y_buf = cl.Buffer(ctx, mf.WRITE_ONLY, Y.nbytes)
+        kn = cl.Kernel(prg, "conv2d_relu")
+        kn.set_args(
+            in_buf, w_buf, b_buf, y_buf,
+            np.int32(C_in), np.int32(H), np.int32(W),
+            np.int32(C_out), np.int32(KH), np.int32(KW),
+            np.int32(stride), np.int32(padding), np.int32(1),
+            np.int32(outH), np.int32(outW)
+        )
+        gsz = (int(outW), int(outH), int(C_out))
+        lsz = (8, 8, 1)
+        # Warm
+        cl.enqueue_nd_range_kernel(q, kn, gsz, lsz)
+        q.finish()
+        t0 = perf_counter()
+        cl.enqueue_nd_range_kernel(q, kn, gsz, lsz)
+        q.finish()
+        cl.enqueue_copy(q, Y, y_buf)
+        q.finish()
+        dt_ai = float(perf_counter() - t0)
+        out_ai = Y.reshape(1, C_out, outH, outW)
+        err = float(np.max(np.abs(out_ai - ref)))
+        console.print(f"AI fused Linf={err:.3e}, time={dt_ai:.6f}s")
+        # Baseline timing
+        t0 = perf_counter()
+        _ = fused_baseline(X, Wt, stride=stride, padding=padding)
+        dt_base = float(perf_counter() - t0)
+        console.print(f"Baseline fused time={dt_base:.6f}s")
+        # Cache if reasonable
+        ai_dir = Path(path).parent
+        manifest = {
+            "operation": "conv2d_relu_fused",
+            "target": "opencl",
+            "model": gen.model,
+            "prompt": gen.last_prompt,
+            "created_at": _dt.utcnow().isoformat() + "Z",
+            "result": {"linf": err, "time": dt_ai, "baseline_time": dt_base, "selected": str(path)},
+        }
+        (ai_dir / f"ai_conv2d_relu_manifest.json").write_text(_json.dumps(manifest, indent=2))
+        if err < 1e-2:
+            try:
+                cache = _UhopCache()
+                from .hardware import detect_hardware as _detect
+                cache.set("conv2d_relu", {"backend": "ai_opencl", "path": str(path), "kernel_name": "conv2d_relu", "hardware": _detect().__dict__})
+                console.print("[green]Cached AI fused kernel for optimizer (ai_opencl/conv2d_relu).[/green]")
+            except Exception as e:
+                console.print(f"[yellow]Warning:[/yellow] could not cache fused kernel: {e}")
+    except Exception as e:
+        console.print(f"[red]Fused build/benchmark failed:[/red] {e}")
 
 
 def _ensure_opencl_context_for_validation():

@@ -47,3 +47,5 @@ class CpuExecutor:
     @staticmethod
     def matmul(A, B):
         return np.array(A) @ np.array(B)
+
+# Removed legacy kernel_cache and stubbed device persistence code (not used in tests/examples)

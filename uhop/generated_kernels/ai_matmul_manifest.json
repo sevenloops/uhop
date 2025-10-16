@@ -1,0 +1,20 @@
+{
+  "operation": "matmul",
+  "target": "opencl",
+  "model": "gpt-4o-mini",
+  "prompt": "Produce a single OpenCL C kernel for operation matmul.\nName the kernel generated_matmul. Use this exact signature:\n__kernel void generated_matmul(const int M, const int N, const int K,\n                                  __global const float* A,\n                                  __global const float* B,\n                                  __global float* C);\nImplement C = A (MxK) x B (KxN).\n- Use simple global indexing; no extensions; no includes; compile on OpenCL 2.0.\n- Bounds check all reads/writes; do not assume multiples of workgroup sizes.\nOutput only the code block.",
+  "created_at": "2025-10-14T10:14:59.879860Z",
+  "candidates": [
+    {
+      "path": "C:\\Users\\Miflow\\Documents\\GitHub\\sevenloops\\uhop\\uhop\\generated_kernels\\ai_matmul_cand1.cl",
+      "linf": 9.5367431640625e-07,
+      "time": 0.006807199999457225
+    },
+    {
+      "path": "C:\\Users\\Miflow\\Documents\\GitHub\\sevenloops\\uhop\\uhop\\generated_kernels\\ai_matmul_cand2.cl",
+      "linf": 9.5367431640625e-07,
+      "time": 0.005208499998843763
+    }
+  ],
+  "selected": "C:\\Users\\Miflow\\Documents\\GitHub\\sevenloops\\uhop\\uhop\\generated_kernels\\ai_matmul_cand2.cl"
+}

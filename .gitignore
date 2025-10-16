@@ -12,3 +12,4 @@ migrations/
 .venv/
 venv/
 .pytest_cache/
+uhhop.egg-info/

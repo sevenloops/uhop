@@ -11,12 +11,12 @@ setup(
     url="https://github.com/sevenloops/uhop",
     packages=find_packages(),
     include_package_data=True,
+    python_requires=">=3.10",
     install_requires=[
         "numpy>=1.26.0",
         "torch>=2.2.0",
-        "triton>=2.2.0",
-        "openai>=1.44.0",
-        "deepseek-sdk>=0.2.1",
+    "triton>=2.2.0; platform_system == 'Linux'",
+    "openai>=1.44.0",
         "py-cpuinfo>=9.0.0",
         "psutil>=5.9.8",
         "pyopencl>=2024.2",
@@ -31,5 +31,18 @@ setup(
         "packaging>=24.1",
     ],
     extras_require={
-        "dev": ["pytest>=8.3.3", "pytest-benchmark>=4.0.0", "ipython>=8.27.0", "jupyter>=1.1.1"],
+        "dev": [
+            "pytest>=8.3.3",
+            "pytest-benchmark>=4.0.0",
+            "ipython>=8.27.0",
+            "jupyter>=1.1.1",
+        ],
         "amd": ["rocm-py>=6.0.1"],
+    "nvidia": ["cupy-cuda12x>=13.0.0"],
+    },
+    entry_points={
+        "console_scripts": [
+            "uhop=uhop.cli:main",
+        ]
+    },
+)

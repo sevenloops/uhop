@@ -2,9 +2,8 @@
 """
 Consolidated AI Codegen provider.
 
-- Primary provider: OpenAI (ChatCompletion)
-- Optional fallback: DeepSeek provider (if DEEPSEEK_API_KEY and DEEPSEEK_URL are set)
-- Supports generating CUDA C code or Python kernels depending on requested target.
+- Provider: OpenAI (ChatCompletion)
+- Supports generating CUDA/OpenCL/Triton/Python kernels depending on requested target.
 - Saves generated code into uhop/generated_kernels/
 """
 import os
@@ -13,11 +12,7 @@ import ast
 from pathlib import Path
 from typing import Optional
 
-# Optional provider: deepseek
-try:
-    from . import deepseek_provider  # type: ignore
-except Exception:
-    deepseek_provider = None
+deepseek_provider = None  # DeepSeek integration removed
 
 try:
     # Prefer OpenAI v1 SDK usage
@@ -52,12 +47,25 @@ def _verify_syntax_python(code: str) -> bool:
 
 class AICodegen:
     def __init__(self, model: str = os.environ.get("UHOP_OPENAI_MODEL", "gpt-4o-mini")):
+        """AI Code generator.
+
+        Parameters
+        ----------
+        model: str
+            OpenAI chat model to use. Defaults to a broadly available model name.
+            Override via UHOP_OPENAI_MODEL env var or passing model=.
+        """
         self.model = model
         self.last_prompt: Optional[str] = None
+        self.last_error: Optional[str] = None  # populated if a provider call fails
+
+    def _debug(self) -> bool:
+        return os.environ.get("UHOP_AI_DEBUG", "0").lower() in ("1", "true", "yes", "on")
 
     def _call_openai(self, prompt: str, max_tokens: int = 1200, temperature: float = 0.0):
         # Requires OPENAI_API_KEY; supports both legacy and v1 SDKs.
         if "OPENAI_API_KEY" not in os.environ:
+            self.last_error = "OPENAI_API_KEY not set in environment"
             return None
         try:
             if _OPENAI_V1 and _OpenAIClient is not None:
@@ -65,36 +73,36 @@ class AICodegen:
                 resp = client.chat.completions.create(
                     model=self.model,
                     messages=[
-                        {"role":"system","content":"You are an assistant that outputs runnable kernels (CUDA C, OpenCL C, Triton, or Python)."},
-                        {"role":"user","content": prompt}
+                        {"role": "system", "content": "You are an assistant that outputs runnable kernels (CUDA C, OpenCL C, Triton, or Python)."},
+                        {"role": "user", "content": prompt},
                     ],
                     max_tokens=max_tokens,
-                    temperature=temperature
+                    temperature=temperature,
                 )
                 return resp.choices[0].message.content
-            # Legacy fallback
+            # Legacy fallback (openai<1.0 style) retained just in case
             if 'openai' in globals() and openai is not None:
                 resp = openai.ChatCompletion.create(
                     model=self.model,
                     messages=[
-                        {"role":"system","content":"You are an assistant that outputs runnable kernels (CUDA C, OpenCL C, Triton, or Python)."},
-                        {"role":"user","content": prompt}
+                        {"role": "system", "content": "You are an assistant that outputs runnable kernels (CUDA C, OpenCL C, Triton, or Python)."},
+                        {"role": "user", "content": prompt},
                     ],
                     max_tokens=max_tokens,
-                    temperature=temperature
+                    temperature=temperature,
                 )
                 return resp["choices"][0]["message"]["content"]
-        except Exception:
-            return None
+            self.last_error = "OpenAI SDK not importable"
+        except Exception as e:
+            # Capture full error for surfacing later
+            self.last_error = f"OpenAI request failed: {type(e).__name__}: {e}"
+            if self._debug():
+                import traceback
+                traceback.print_exc()
         return None
 
     def _call_deepseek(self, prompt: str):
-        if deepseek_provider is None or not getattr(deepseek_provider, "is_configured", lambda: False)():
-            return None
-        try:
-            return deepseek_provider.generate(prompt)
-        except Exception:
-            return None
+        return None
 
     def generate(self, operation_name: str, target: Optional[str] = None, prompt_extra: Optional[str] = None, *, temperature: float = 0.0, suffix: Optional[str] = None) -> Path:
         """
@@ -102,6 +110,20 @@ class AICodegen:
         target: "cuda", "opencl", "python", "triton" (advisory; generator prefers CUDA).
         Returns path to saved code file in generated_kernels/.
         """
+        # Choose target if not provided based on detected hardware
+        if target is None:
+            try:
+                from ..hardware import detect_hardware
+                hw = detect_hardware()
+                if hw.kind.startswith("opencl") or hw.vendor in ("amd", "intel"):
+                    target = "opencl"
+                elif hw.vendor == "nvidia":
+                    target = "cuda"
+                else:
+                    target = "opencl"
+            except Exception:
+                target = "opencl"
+
         # Build a flexible prompt depending on target
         if target == "opencl":
             op = operation_name.lower()
@@ -154,13 +176,15 @@ class AICodegen:
         self.last_prompt = prompt
         text = self._call_openai(prompt, temperature=temperature)
         provider = "openai"
-        if not text:
-            # fallback to deepseek
-            text = self._call_deepseek(prompt)
-            provider = "deepseek" if text else None
 
         if not text:
-            raise RuntimeError("No AI provider produced code. Configure OPENAI_API_KEY or DeepSeek credentials.")
+            # Surface more helpful diagnostics
+            detail = self.last_error or "unknown error"
+            raise RuntimeError(
+                "AI code generation failed. "
+                f"Model='{self.model}'. Detail: {detail}. "
+                "Ensure OPENAI_API_KEY is valid and the model name is correct (override via UHOP_OPENAI_MODEL)."
+            )
 
         blocks = _extract_code_blocks(text)
         if not blocks:
