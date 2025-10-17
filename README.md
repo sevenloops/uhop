@@ -1,5 +1,9 @@
 # UHop MVP (developer-integrated)
 
+[![Deploy Frontend to GitHub Pages](https://github.com/sevenloops/uhop/actions/workflows/deploy-frontend-pages.yml/badge.svg)](https://github.com/sevenloops/uhop/actions/workflows/deploy-frontend-pages.yml)
+
+Live site (GitHub Pages): <https://sevenloops.github.io/uhop/>
+
 This repository is an MVP for UHOP — a runtime that:
 
 - Detects hardware (CUDA vs CPU),
@@ -82,7 +86,7 @@ This repo includes a GitHub Actions workflow that automatically creates and upda
 
 ## Deploying the public demo
 
-Want YC reviewers to try the demo online without local setup? Deploy the backend to Railway/Render/Fly and the frontend to Vercel in minutes. See `docs/DEPLOY.md` for step-by-step instructions.
+Want YC reviewers to try the demo online without local setup? Deploy the backend to Railway/Render/Fly and the frontend to Vercel or GitHub Pages. See `docs/DEPLOY.md` for step-by-step instructions.
 
 What it does:
 
