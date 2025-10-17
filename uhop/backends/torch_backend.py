@@ -1,11 +1,10 @@
 # uhop/backends/torch_backend.py
 """
-Torch backend wrapper that will run operations on the best torch device available:
-- CUDA if available (works for CUDA and ROCm-built PyTorch)
-- MPS (Apple) if available
-- CPU fallback if neither
-This wrapper returns NumPy arrays for UHOP consumers when input is numpy,
-but accepts torch.Tensor and returns torch.Tensor if input was tensor to avoid copies.
+PyTorch backend wrapper.
+
+Picks the best torch device at runtime (CUDA > MPS > CPU). Functions accept
+NumPy arrays or torch.Tensor. If any input is a torch tensor, returns a
+tensor to avoid unnecessary host/device copies; otherwise returns NumPy.
 """
 import numpy as np
 
@@ -55,7 +54,8 @@ def torch_matmul(a, b):
     ta = _to_torch(a).to(dev)
     tb = _to_torch(b).to(dev)
     tr = torch.matmul(ta, tb)
-    # if inputs were torch tensors, return torch Tensor to caller to avoid copies
+    # If inputs were torch tensors, return a torch Tensor to the caller to
+    # avoid copies.
     if isinstance(a, torch.Tensor) or isinstance(b, torch.Tensor):
         return tr
     return tr.cpu().numpy()
@@ -74,7 +74,10 @@ def torch_conv2d(input_np, weight_np, stride=1, padding=0):
     w = _to_torch(weight_np).to(dev)
     out = F.conv2d(inp, w, stride=stride, padding=padding)
     # return torch tensor if inputs were torch; otherwise numpy
-    if isinstance(input_np, torch.Tensor) or isinstance(weight_np, torch.Tensor):
+    if (
+        isinstance(input_np, torch.Tensor)
+        or isinstance(weight_np, torch.Tensor)
+    ):
         return out
     return out.cpu().numpy()
 

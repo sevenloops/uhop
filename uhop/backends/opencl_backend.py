@@ -1,12 +1,19 @@
 # uhop/backends/opencl_backend.py
 """
-OpenCL backend with persistent program + buffer caching and device conv2d/conv2d_relu kernels.
-Requires: pyopencl
+OpenCL backend.
+
+Features:
+- Device selection (env override + process-wide index)
+- Program cache with optional persistence via KernelRegistry
+- Simple buffer pool to reduce cl.Buffer churn
+- Fused conv2d and conv2d+relu reference kernels
+
+This module is used by the optimizer and the CLI demos when OpenCL is present.
 """
 
 from __future__ import annotations
 import threading
-from typing import Tuple, Optional
+from typing import Optional
 import os
 
 try:
@@ -52,7 +59,8 @@ if _OPENCL_AVAILABLE:
             _buffer_cache.clear()
 
     def _build_ctx_queue():
-        # Choose a GPU device deterministically; allow override via env or setter
+        # Choose a GPU device deterministically; allow override via env or
+        # setter
         env_idx = os.environ.get("UHOP_OPENCL_DEVICE_INDEX")
         chosen = _DEVICE_INDEX
         if env_idx is not None:
@@ -66,20 +74,26 @@ if _OPENCL_AVAILABLE:
             if chosen is not None and 0 <= chosen < len(gpu_devs):
                 _, d = gpu_devs[chosen]
                 ctx = cl.Context(devices=[d])
-                q = cl.CommandQueue(ctx, properties=cl.command_queue_properties.PROFILING_ENABLE)
+                props = cl.command_queue_properties.PROFILING_ENABLE
+                q = cl.CommandQueue(ctx, properties=props)
                 return ctx, q
             # default: first GPU
             for p in plats:
-                gpus = [d for d in p.get_devices() if d.type & cl.device_type.GPU]
+                gpus = [
+                    d for d in p.get_devices()
+                    if d.type & cl.device_type.GPU
+                ]
                 if gpus:
                     ctx = cl.Context(devices=[gpus[0]])
-                    q = cl.CommandQueue(ctx, properties=cl.command_queue_properties.PROFILING_ENABLE)
+                    props = cl.command_queue_properties.PROFILING_ENABLE
+                    q = cl.CommandQueue(ctx, properties=props)
                     return ctx, q
         except Exception:
             pass
         # fallback: any device (may be CPU)
         ctx = cl.create_some_context(interactive=False)
-        q = cl.CommandQueue(ctx, properties=cl.command_queue_properties.PROFILING_ENABLE)
+        props = cl.command_queue_properties.PROFILING_ENABLE
+        q = cl.CommandQueue(ctx, properties=props)
         return ctx, q
 
     _conv2d_cl_source = r"""
@@ -121,18 +135,24 @@ if _OPENCL_AVAILABLE:
     # Load fused conv2d+relu kernel source from kernels directory
     def _load_conv2d_relu_kernel_source() -> str:
         from pathlib import Path as _Path
-        src_path = _Path(__file__).resolve().parents[1] / "kernels" / "opencl" / "conv2d_relu.cl"
+        src_path = (
+            _Path(__file__).resolve().parents[1]
+            / "kernels" / "opencl" / "conv2d_relu.cl"
+        )
         return src_path.read_text()
 
     def _load_conv2d_tiled_source() -> str:
         from pathlib import Path as _Path
-        src_path = _Path(__file__).resolve().parents[1] / "kernels" / "opencl" / "conv2d_tiled.cl"
+        src_path = (
+            _Path(__file__).resolve().parents[1]
+            / "kernels" / "opencl" / "conv2d_tiled.cl"
+        )
         return src_path.read_text()
 
     def _get_program(ctx, source: str, program_key: str):
         """
-        Compile or retrieve a cached program for the given context and source key.
-        program_key should identify semantics (e.g., "conv2d_device" + device name).
+        Compile/get a cached program for the context/source key.
+        program_key should identify semantics (e.g., conv2d_device + device).
         """
         key = (id(ctx), program_key)
         with _program_cache_lock:
@@ -156,8 +176,13 @@ if _OPENCL_AVAILABLE:
                     # Save binaries if available
                     try:
                         bins = prg.get_info(cl.program_info.BINARIES)
-                        if bins and isinstance(bins, (list, tuple)) and len(bins) > 0:
-                            reg.save_opencl_binary(dev_name, h, bins)  # type: ignore
+                        if (
+                            bins and isinstance(bins, (list, tuple))
+                            and len(bins) > 0
+                        ):
+                            reg.save_opencl_binary(
+                                dev_name, h, bins
+                            )  # type: ignore
                     except Exception:
                         pass
             except Exception:
@@ -214,7 +239,17 @@ if _OPENCL_AVAILABLE:
         }
         """
         prg = _get_program(ctx, prg_src, "matmul")
-        evt = prg.matmul(q, (m, n), None, _np.int32(m), _np.int32(n), _np.int32(k), a_buf, b_buf, c_buf)
+        evt = prg.matmul(
+            q,
+            (m, n),
+            None,
+            _np.int32(m),
+            _np.int32(n),
+            _np.int32(k),
+            a_buf,
+            b_buf,
+            c_buf,
+        )
         # Non-blocking: read back and finish
         cl.enqueue_copy(q, c, c_buf, wait_for=[evt])
         q.finish()
@@ -232,7 +267,9 @@ if _OPENCL_AVAILABLE:
         out_buf = _POOL.get(ctx, out.nbytes, mf.WRITE_ONLY)
         cl.enqueue_copy(q, a_buf, x)
         prg_src = r"""
-        __kernel void relu(__global const float* A, __global float* Out, const int N) {
+    __kernel void relu(__global const float* A,
+               __global float* Out,
+               const int N) {
             int i = get_global_id(0);
             if (i < N) {
                 float v = A[i];
@@ -241,7 +278,9 @@ if _OPENCL_AVAILABLE:
         }
         """
         prg = _get_program(ctx, prg_src, "relu")
-        evt = prg.relu(q, (x.size,), None, a_buf, out_buf, _np.int32(x.size))
+        evt = prg.relu(
+            q, (x.size,), None, a_buf, out_buf, _np.int32(x.size)
+        )
         cl.enqueue_copy(q, out, out_buf, wait_for=[evt])
         q.finish()
         return out.reshape(-1)
@@ -263,14 +302,16 @@ if _OPENCL_AVAILABLE:
         weight_np = _np.array(weight_np, dtype=_np.float32, order="C")
         N, C, H, W = input_np.shape
         Cout, Cin, KH, KW = weight_np.shape
-        # If stride/padding are default (1/0) and batch is 1, use device fused kernel when fuse_relu
+    # If stride/padding are default (1/0) and batch is 1, use device fused
+    # kernel when fuse_relu
         if stride == 1 and padding == 0 and N == 1:
             outH = H - KH + 1
             outW = W - KW + 1
             out = _np.zeros((N, Cout, outH, outW), dtype=_np.float32)
             mf = cl.mem_flags
             if fuse_relu:
-                # Kernel expects single-batch input [C_in,H_in,W_in] and outputs [C_out,H_out,W_out]
+                # Kernel expects single-batch input [C_in,H_in,W_in] and
+                # outputs [C_out,H_out,W_out]
                 inp0 = input_np[0]
                 from ..cache import OPENCL_BUFFER_POOL as _POOL
                 in_buf = _POOL.get(ctx, inp0.nbytes, mf.READ_ONLY)
@@ -283,34 +324,55 @@ if _OPENCL_AVAILABLE:
                 cl.enqueue_copy(q, in_buf, inp0)
                 cl.enqueue_copy(q, w_buf, weight_np)
                 cl.enqueue_copy(q, b_buf, bias)
-                prg = _get_program(ctx, _load_conv2d_relu_kernel_source(), "conv2d_relu_fused_file")
+                prg = _get_program(
+                    ctx, _load_conv2d_relu_kernel_source(),
+                    "conv2d_relu_fused_file",
+                )
                 kn = cl.Kernel(prg, "conv2d_relu")
-                # global size: (W_out, H_out, C_out); use autotuned local size if available
+                # global size: (W_out, H_out, C_out); autotune local size
+                # if available
                 gsz = (int(outW), int(outH), int(Cout))
                 lsz = None
                 try:
                     from ..cache import UhopAutotune as _UhopAutotune
-                    from . import opencl_matmul as _
                     # build a simple shape key
                     shape_key = f"N{N}_C{C}_H{H}_W{W}_Co{Cout}_KH{KH}_KW{KW}"
-                    dev_name = ctx.devices[0].name if ctx.devices else "unknown"
-                    lsz_t = _UhopAutotune().get_lsz("opencl", "conv2d_relu", "conv2d_relu", dev_name, shape_key)
+                    dev_name = (
+                        ctx.devices[0].name if ctx.devices else "unknown"
+                    )
+                    lsz_t = _UhopAutotune().get_lsz(
+                        "opencl",
+                        "conv2d_relu",
+                        "conv2d_relu",
+                        dev_name,
+                        shape_key,
+                    )
                     if lsz_t and len(lsz_t) in (2, 3):
                         lsz = tuple(int(x) for x in lsz_t)
                 except Exception:
                     lsz = None
                 if lsz is None:
                     # Micro-autotune a few candidates
-                    candidates = [(8,8,1), (16,8,1), (8,16,1)]
+                    candidates = [(8, 8, 1), (16, 8, 1), (8, 16, 1)]
                     best = None
                     best_t = 1e9
                     for cand in candidates:
                         kn.set_args(
-                            in_buf, w_buf, b_buf, out_buf,
-                            _np.int32(C), _np.int32(H), _np.int32(W),
-                            _np.int32(Cout), _np.int32(KH), _np.int32(KW),
-                            _np.int32(1), _np.int32(0), _np.int32(0),
-                            _np.int32(outH), _np.int32(outW)
+                            in_buf,
+                            w_buf,
+                            b_buf,
+                            out_buf,
+                            _np.int32(C),
+                            _np.int32(H),
+                            _np.int32(W),
+                            _np.int32(Cout),
+                            _np.int32(KH),
+                            _np.int32(KW),
+                            _np.int32(1),
+                            _np.int32(0),
+                            _np.int32(0),
+                            _np.int32(outH),
+                            _np.int32(outW),
                         )
                         evt = cl.enqueue_nd_range_kernel(q, kn, gsz, cand)
                         evt.wait()
@@ -323,18 +385,31 @@ if _OPENCL_AVAILABLE:
                         if dt == 0.0:
                             # fallback rough timing
                             import time as _time
-                            t0 = _time.perf_counter(); cl.enqueue_nd_range_kernel(q, kn, gsz, cand); q.finish(); dt = _time.perf_counter() - t0
+                            t0 = _time.perf_counter()
+                            cl.enqueue_nd_range_kernel(q, kn, gsz, cand)
+                            q.finish()
+                            dt = _time.perf_counter() - t0
                         if dt < best_t:
                             best_t = dt
                             best = cand
-                    lsz = best or (8,8,1)
+                    lsz = best or (8, 8, 1)
                 # set args
                 kn.set_args(
-                    in_buf, w_buf, b_buf, out_buf,
-                    _np.int32(C), _np.int32(H), _np.int32(W),
-                    _np.int32(Cout), _np.int32(KH), _np.int32(KW),
-                    _np.int32(1), _np.int32(0), _np.int32(0),
-                    _np.int32(outH), _np.int32(outW)
+                    in_buf,
+                    w_buf,
+                    b_buf,
+                    out_buf,
+                    _np.int32(C),
+                    _np.int32(H),
+                    _np.int32(W),
+                    _np.int32(Cout),
+                    _np.int32(KH),
+                    _np.int32(KW),
+                    _np.int32(1),
+                    _np.int32(0),
+                    _np.int32(0),
+                    _np.int32(outH),
+                    _np.int32(outW),
                 )
                 evt = cl.enqueue_nd_range_kernel(q, kn, gsz, lsz)
                 q.finish()
@@ -344,8 +419,17 @@ if _OPENCL_AVAILABLE:
                 try:
                     from ..cache import UhopAutotune as _UhopAutotune
                     shape_key = f"N{N}_C{C}_H{H}_W{W}_Co{Cout}_KH{KH}_KW{KW}"
-                    dev_name = ctx.devices[0].name if ctx.devices else "unknown"
-                    _UhopAutotune().set_lsz("opencl", "conv2d_relu", "conv2d_relu", dev_name, shape_key, list(lsz))
+                    dev_name = (
+                        ctx.devices[0].name if ctx.devices else "unknown"
+                    )
+                    _UhopAutotune().set_lsz(
+                        "opencl",
+                        "conv2d_relu",
+                        "conv2d_relu",
+                        dev_name,
+                        shape_key,
+                        list(lsz),
+                    )
                 except Exception:
                     pass
                 out[0] = out0
@@ -364,14 +448,18 @@ if _OPENCL_AVAILABLE:
                 getattr(prg, kernel_name)(
                     q, global_size, None,
                     _np.int32(N), _np.int32(C), _np.int32(H), _np.int32(W),
-                    _np.int32(Cout), _np.int32(Cin), _np.int32(KH), _np.int32(KW),
+                    _np.int32(Cout),
+                    _np.int32(Cin),
+                    _np.int32(KH),
+                    _np.int32(KW),
                     in_buf, w_buf, out_buf,
                 )
                 cl.enqueue_copy(q, out, out_buf)
                 q.finish()
                 return out
         else:
-            # General path: use tiled OpenCL Conv2D kernel with local memory for any N/stride/pad
+            # General path: use tiled OpenCL Conv2D kernel with local memory
+            # for any N/stride/pad
             outH = (H + 2 * padding - KH) // stride + 1
             outW = (W + 2 * padding - KW) // stride + 1
             out = _np.zeros((N, Cout, outH, outW), dtype=_np.float32)
@@ -382,15 +470,19 @@ if _OPENCL_AVAILABLE:
             out_buf = _POOL.get(ctx, out.nbytes, mf.WRITE_ONLY)
             cl.enqueue_copy(q, in_buf, input_np)
             cl.enqueue_copy(q, w_buf, weight_np)
-            prg = _get_program(ctx, _load_conv2d_tiled_source(), "conv2d_tiled")
+            prg = _get_program(
+                ctx, _load_conv2d_tiled_source(), "conv2d_tiled"
+            )
             kn = cl.Kernel(prg, "conv2d_tiled")
-            # Global size padded to multiples of tile sizes for valid local size usage
+            # Global size padded to multiples of tile sizes for valid local
+            # size usage
             gsz_x = int(((outW + 8 - 1) // 8) * 8)
             gsz_y = int(((outH + 8 - 1) // 8) * 8)
             gsz = (gsz_x, gsz_y, int(N * Cout))
             # Local tile sizes (8,8,1) consistent with kernel defines
             lsz = (8, 8, 1)
-            # Dynamic local memory sizes for input tile and weight tile (account for stride)
+            # Dynamic local memory sizes for input tile and weight tile
+            # (account for stride)
             tile_in_w = (8 - 1) * stride + KW
             tile_in_h = (8 - 1) * stride + KH
             tile_in_bytes = int(tile_in_w * tile_in_h * 4)
@@ -400,7 +492,10 @@ if _OPENCL_AVAILABLE:
                 in_buf, w_buf, out_buf,
                 _np.int32(N), _np.int32(C), _np.int32(H), _np.int32(W),
                 _np.int32(Cout), _np.int32(KH), _np.int32(KW),
-                _np.int32(outH), _np.int32(outW), _np.int32(stride), _np.int32(padding),
+                _np.int32(outH),
+                _np.int32(outW),
+                _np.int32(stride),
+                _np.int32(padding),
                 cl.LocalMemory(tile_in_bytes),
                 cl.LocalMemory(tile_w_bytes),
             )
@@ -413,7 +508,9 @@ if _OPENCL_AVAILABLE:
             return out
 
     def opencl_conv2d_relu(input_np, weight_np, stride=1, padding=0):
-        return opencl_conv2d(input_np, weight_np, stride=stride, padding=padding, fuse_relu=True)
+        return opencl_conv2d(
+            input_np, weight_np, stride=stride, padding=padding, fuse_relu=True
+        )
 
 else:
 
@@ -425,5 +522,6 @@ else:
 
     def opencl_conv2d(*args, **kwargs):
         raise RuntimeError("pyopencl not available")
+
     def opencl_conv2d_relu(*args, **kwargs):
         raise RuntimeError("pyopencl not available")

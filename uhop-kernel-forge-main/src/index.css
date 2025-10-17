@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 240 10% 3%;
+    --foreground: 210 40% 98%;
+
+    --card: 240 8% 6%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 240 8% 6%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 190 100% 50%;
+    --primary-foreground: 240 10% 3%;
+
+    --secondary: 262 83% 58%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 240 8% 12%;
+    --muted-foreground: 217 10% 64%;
+
+    --accent: 142 76% 36%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 240 8% 15%;
+    --input: 240 8% 15%;
+    --ring: 190 100% 50%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 240 10% 4%;
+    --sidebar-foreground: 210 40% 90%;
+    --sidebar-primary: 190 100% 50%;
+    --sidebar-primary-foreground: 240 10% 3%;
+    --sidebar-accent: 240 8% 12%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 240 8% 15%;
+    --sidebar-ring: 190 100% 50%;
+
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(262 83% 58%) 0%, hsl(190 100% 50%) 100%);
+    --gradient-subtle: linear-gradient(180deg, hsl(240 10% 3%) 0%, hsl(240 8% 6%) 100%);
+    --gradient-glow: radial-gradient(circle at 50% 0%, hsl(190 100% 50% / 0.15) 0%, transparent 50%);
+
+    /* Shadows */
+    --shadow-glow: 0 0 40px hsl(190 100% 50% / 0.3);
+    --shadow-card: 0 10px 40px hsl(0 0% 0% / 0.5);
+
+    /* Transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Grid background effect */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: 
+      linear-gradient(hsl(190 100% 50% / 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(190 100% 50% / 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+    pointer-events: none;
+    z-index: 0;
+  }
+}
+
+@layer utilities {
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent;
+  }
+
+  .glow-text {
+    text-shadow: 0 0 20px hsl(var(--primary) / 0.5);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}

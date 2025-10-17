@@ -41,13 +41,19 @@ def info():
 
 
 @main.command()
-@click.option("--size", "size", default=192, show_default=True, help="Matrix size N for NxN matmul demo.")
+@click.option(
+    "--size",
+    "size",
+    default=192,
+    show_default=True,
+    help="Matrix size N for NxN matmul demo.",
+)
 def demo(size: int):
-    """Run a short demo: device info + Naive Python vs UHOP (GPU-preferred) matmul benchmark."""
+    """Run device info + Naive Python vs UHOP matmul benchmark."""
     console.print("[bold cyan]UHOP Demo[/bold cyan]")
     console.print(_hardware_summary())
 
-    # Naive triple-loop Python baseline (very slow, but proves UHOP acceleration clearly)
+    # Naive triple-loop Python baseline (very slow) shows UHOP clearly
     def matmul_naive(A: np.ndarray, B: np.ndarray) -> np.ndarray:
         N, M = A.shape
         M2, K = B.shape
@@ -82,14 +88,18 @@ def demo(size: int):
         return float(np.median(times))
 
     t_uhop = _med(lambda: matmul_np(A, B))
-    t_naive = _med(lambda: matmul_naive(A, B), iters=1)  # single iter; it's very slow
+    # single iter; it's very slow
+    t_naive = _med(lambda: matmul_naive(A, B), iters=1)
 
     console.print(f"UHOP (optimized over naive): [bold]{t_uhop:.6f} s[/bold]")
     console.print(f"Naive Python baseline     : [bold]{t_naive:.6f} s[/bold]")
     if t_uhop < t_naive:
         console.print("[green]UHOP wins ✅[/green]")
     else:
-        console.print("[yellow]Baseline was faster in this config. Try larger size or check GPU drivers.[/yellow]")
+        console.print(
+            "[yellow]Baseline faster. Try larger size or check GPU "
+            "drivers.[/yellow]"
+        )
 
 
 @main.command()
