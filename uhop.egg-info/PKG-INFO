@@ -1,3 +1,45 @@
+Metadata-Version: 2.4
+Name: uhop
+Version: 0.1.0
+Summary: Universal Hardware Optimization Protocol (UHOP) — AI-powered runtime kernel optimizer for developers.
+Home-page: https://github.com/sevenloops/uhop
+Author: UHOP Systems
+Author-email: UHOP Systems <danbis664@gmail.com>
+License: MIT
+Project-URL: Homepage, https://github.com/sevenloops/uhop
+Project-URL: Documentation, https://uhop.dev/docs
+Project-URL: Source, https://github.com/sevenloops/uhop
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.26.0
+Requires-Dist: torch>=2.2.0
+Requires-Dist: triton>=2.2.0; platform_system == "Linux"
+Requires-Dist: openai>=1.44.0
+Requires-Dist: py-cpuinfo>=9.0.0
+Requires-Dist: psutil>=5.9.8
+Requires-Dist: pyopencl>=2024.2
+Requires-Dist: tqdm>=4.66.4
+Requires-Dist: tabulate>=0.9.0
+Requires-Dist: orjson>=3.10.7
+Requires-Dist: filelock>=3.15.0
+Requires-Dist: rich>=13.7.1
+Requires-Dist: coloredlogs>=15.0.1
+Requires-Dist: click>=8.1.7
+Requires-Dist: typing-extensions>=4.12.0
+Requires-Dist: packaging>=24.1
+Provides-Extra: dev
+Requires-Dist: pytest>=8.3.3; extra == "dev"
+Requires-Dist: pytest-benchmark>=4.0.0; extra == "dev"
+Requires-Dist: ipython>=8.27.0; extra == "dev"
+Requires-Dist: jupyter>=1.1.1; extra == "dev"
+Provides-Extra: amd
+Requires-Dist: rocm-py>=6.0.1; extra == "amd"
+Provides-Extra: nvidia
+Requires-Dist: cupy-cuda12x>=13.0.0; extra == "nvidia"
+Dynamic: author
+Dynamic: home-page
+Dynamic: requires-python
+
 # UHop MVP (developer-integrated)
 
 This repository is an MVP for UHOP — a runtime that:
@@ -43,46 +85,3 @@ Environment override: set `UHOP_OPENCL_DEVICE_INDEX=<idx>` to select a default O
   - Use `--ocl-device` to select a GPU, and try larger shapes (e.g. `--h 224 --w 224 --c-in 16 --c-out 32`) for stronger GPU gains.
 
 See `docs/RUN_REPORT.md` for a summary of errors encountered and solutions applied during development, plus sample benchmark outputs.
-
-## Syncing GitHub Issues from `issues/` (optional)
-
-This repo includes a GitHub Actions workflow that automatically creates and updates GitHub Issues based on Markdown files under the `issues/` folder.
-
-What it does:
-
-- On every push that changes files in `issues/**` (or when manually triggered), the workflow scans `issues/` for `.md` files.
-- For each file, it creates or updates a GitHub Issue with a stable footer marker: `Source: issues/<path/to/file.md>`.
-- It adds the label `synced-from-folder` to identify issues managed by CI.
-- If a source file is deleted, the corresponding Issue is automatically closed with a comment.
-
-File format:
-
-- Title will be derived from front matter (`title:`), the first `# Heading` in the Markdown, or the filename.
-- Optional front matter is supported between `---` lines at the top. Supported keys:
-  - `title: <string>`
-  - `labels: [label-a, label-b]` or `labels: label-a, label-b`
-  - `assignees: [user1, user2]` or `assignees: user1, user2`
-
-Example (`issues/01-example.md`):
-
-```markdown
----
-title: Improve GPU kernel selection
-labels: [optimization, mvp]
-assignees: user1, user2
----
-
-# Improve GPU kernel selection
-
-Describe the change, acceptance criteria, and references here.
-```
-
-How to run it:
-
-- Push changes to files under `issues/` to trigger the workflow automatically.
-- Or run it manually from the Actions tab: "Sync GitHub Issues from files" → Run workflow.
-
-Notes:
-
-- The workflow adds a footer to the issue body with the source path and a warning not to edit below the separator. Edit the Markdown file instead.
-- The workflow merges any existing labels with those from front matter and always ensures the `synced-from-folder` label is present.
