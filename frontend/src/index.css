@@ -82,9 +82,29 @@ All colors MUST be HSL.
     background-image: 
       linear-gradient(hsl(190 100% 50% / 0.03) 1px, transparent 1px),
       linear-gradient(90deg, hsl(190 100% 50% / 0.03) 1px, transparent 1px);
-    background-size: 50px 50px;
+    background-size: 40px 40px;
     pointer-events: none;
     z-index: 0;
+  }
+}
+
+@layer base {
+  /* Ensure app content paints above the background overlay */
+  #root { position: relative; z-index: 1; }
+}
+
+/* Top overlay grid to ensure visibility across sections */
+@layer base {
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10; /* below nav (z-50), above regular content */
+    background-image:
+      linear-gradient(hsl(0 0% 100% / 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(0 0% 100% / 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
   }
 }
 

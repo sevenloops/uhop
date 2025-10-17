@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Redirecting…</title>
+  <meta http-equiv="refresh" content="0; url=/uhop/" />
+    <script>
+      // Single Page App redirect: preserve path for client-side router
+      (function() {
+        var l = window.location;
+        var redirect = '/' + (l.pathname + l.search + l.hash).replace(/^\//, '');
+        sessionStorage.setItem('redirect', redirect);
+        // redirect to project base on GitHub Pages
+        window.location.replace('/uhop/');
+      })();
+    </script>
+  </head>
+  <body></body>
+  </html>

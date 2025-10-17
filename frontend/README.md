@@ -30,11 +30,23 @@ npm run dev
 
 Open the local URL printed by Vite (usually <http://localhost:5173>).
 
+Optionally set an online API base so the Demo page can run without a local bridge:
+
+```bash
+VITE_UHOP_API_BASE=https://demo-api.uhop.dev npm run dev
+```
+
 ## Build
 
 ```bash
 npm run build
 npm run preview
+```
+
+For deployment, you can bake the API base into the build:
+
+```bash
+VITE_UHOP_API_BASE=https://demo-api.uhop.dev npm run build
 ```
 
 ## Content sources

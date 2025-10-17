@@ -93,13 +93,13 @@ const About = () => {
                       </a>
                     </Button>
                     <Button variant="outline" size="sm" asChild>
-                      <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer">
+                      <a href="https://www.linkedin.com/in/danielbisina" target="_blank" rel="noopener noreferrer">
                         <Linkedin className="h-4 w-4 mr-2" />
                         LinkedIn
                       </a>
                     </Button>
                     <Button variant="outline" size="sm" asChild>
-                      <a href="mailto:contact@uhop.dev">
+                      <a href="mailto:danbis664@gmail.com">
                         <Mail className="h-4 w-4 mr-2" />
                         Email
                       </a>
@@ -154,7 +154,7 @@ const About = () => {
                   </a>
                 </Button>
                 <Button size="lg" variant="outline" asChild>
-                  <a href="mailto:contact@uhop.dev">
+                  <a href="mailto:danbis664@gmail.com">
                     Contact Us
                   </a>
                 </Button>

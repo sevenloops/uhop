@@ -46,7 +46,43 @@ See `docs/RUN_REPORT.md` for a summary of errors encountered and solutions appli
 
 ## Syncing GitHub Issues from `issues/` (optional)
 
+## Online demo API (optional)
+
+To let people try the demo directly on the website (without running a local bridge), you can run a tiny HTTP API that exposes safe endpoints:
+
+Endpoints:
+
+- GET /health
+- GET /info — same JSON as `uhop info --json`
+- POST /demo/matmul — runs a small, bounded matmul demo and returns timings
+
+Run locally:
+
+```bash
+uhop web-api --host 0.0.0.0 --port 5824
+# or
+python -m uhop.web_api --host 0.0.0.0 --port 5824
+```
+
+Docker:
+
+```bash
+docker build -t uhop-demo-api -f api.Dockerfile .
+docker run --rm -p 5824:5824 uhop-demo-api
+```
+
+Point the docs/demo site to this API by setting `VITE_UHOP_API_BASE`, e.g.:
+
+```bash
+VITE_UHOP_API_BASE="https://demo-api.uhop.dev" npm run build
+```
+
+
 This repo includes a GitHub Actions workflow that automatically creates and updates GitHub Issues based on Markdown files under the `issues/` folder.
+
+## Deploying the public demo
+
+Want YC reviewers to try the demo online without local setup? Deploy the backend to Railway/Render/Fly and the frontend to Vercel in minutes. See `docs/DEPLOY.md` for step-by-step instructions.
 
 What it does:
 

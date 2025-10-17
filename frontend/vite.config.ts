@@ -5,6 +5,8 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  // Use project base path for GitHub Pages (https://sevenloops.github.io/uhop/)
+  base: mode === "production" ? "/uhop/" : "/",
   server: {
     host: "::",
     port: 8080,

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import CodeBlock from "@/components/CodeBlock";
-import { Play, Cpu, Zap } from "lucide-react";
+import { Play, Cpu, Zap, Globe } from "lucide-react";
 
 const Demo = () => {
   // Interactive CLI-style demo (no charts). Users run commands locally and paste outputs here.
@@ -14,6 +14,13 @@ const Demo = () => {
   const [bridgeUrl, setBridgeUrl] = useState("http://127.0.0.1:5823");
   const [bridgeStatus, setBridgeStatus] = useState<"unknown"|"checking"|"ok"|"down">("unknown");
   const [bridgeMsg, setBridgeMsg] = useState<string>("");
+
+  // Online API base (set VITE_UHOP_API_BASE at build time)
+  const envAny = (import.meta as unknown as { env?: Record<string, string> });
+  const defaultOnline = envAny?.env?.VITE_UHOP_API_BASE || "";
+  const [onlineUrl, setOnlineUrl] = useState<string>(defaultOnline);
+  const [onlineStatus, setOnlineStatus] = useState<"unknown"|"checking"|"ok"|"down">("unknown");
+  const [onlineMsg, setOnlineMsg] = useState<string>("");
 
   async function pingBridge(urlOverride?: string) {
     const url = urlOverride ?? bridgeUrl;
@@ -34,6 +41,25 @@ const Demo = () => {
     }
   }
 
+  async function pingOnline(urlOverride?: string) {
+    const url = (urlOverride ?? onlineUrl).replace(/\/$/, "");
+    setOnlineStatus("checking");
+    setOnlineMsg("");
+    try {
+      const r = await fetch(`${url}/health`);
+      if (r.ok) {
+        setOnlineStatus("ok");
+        if (urlOverride) setOnlineUrl(url);
+      } else {
+        setOnlineStatus("down");
+        setOnlineMsg(`Health check failed with status ${r.status}`);
+      }
+    } catch (e) {
+      setOnlineStatus("down");
+      setOnlineMsg("Could not reach online API. Is it deployed?");
+    }
+  }
+
   // Auto-detect on first load: try 127.0.0.1 then localhost
   const autoTriedRef = useRef(false);
   useEffect(() => {
@@ -41,11 +67,32 @@ const Demo = () => {
     autoTriedRef.current = true;
     let cancelled = false;
     (async () => {
+      // Try configured online API first
+      if (defaultOnline) {
+        try {
+          const r0 = await fetch(`${String(defaultOnline).replace(/\/$/, "")}/health`);
+          if (!cancelled && r0.ok) {
+            setOnlineUrl(String(defaultOnline).replace(/\/$/, ""));
+            setOnlineStatus("ok");
+          }
+        } catch (_e) { /* no-op */ }
+      }
       // prefer 127.0.0.1
       try {
         const r1 = await fetch("http://127.0.0.1:5823/health");
         if (!cancelled && r1.ok) {
           setBridgeUrl("http://127.0.0.1:5823");
+          setBridgeStatus("ok");
+          return;
+        }
+      } catch (e) {
+        // ignored
+      }
+      // try alternate 5825
+      try {
+        const r1b = await fetch("http://127.0.0.1:5825/health");
+        if (!cancelled && r1b.ok) {
+          setBridgeUrl("http://127.0.0.1:5825");
           setBridgeStatus("ok");
           return;
         }
@@ -63,10 +110,20 @@ const Demo = () => {
       } catch (e) {
         // ignored
       }
+      try {
+        const r2b = await fetch("http://localhost:5825/health");
+        if (!cancelled && r2b.ok) {
+          setBridgeUrl("http://localhost:5825");
+          setBridgeStatus("ok");
+          return;
+        }
+      } catch (e) {
+        // ignored
+      }
       if (!cancelled) setBridgeStatus("down");
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [defaultOnline]);
 
   async function runCmd(cmd: string): Promise<{code:number,stdout:string,stderr:string}|null> {
     try {
@@ -77,7 +134,7 @@ const Demo = () => {
       });
       if (!r.ok) {
         setBridgeStatus("down");
-        setBridgeMsg(`Bridge responded with status ${r.status}`);
+        setBridgeMsg(`Bridge responded with status ${r.status}${r.status===404?" — check that the Bridge URL is not pointing to the Online API (use port 5823 or 5825).":""}`);
         return null;
       }
       return await r.json();
@@ -85,6 +142,46 @@ const Demo = () => {
       setBridgeStatus("down");
       setBridgeMsg("Failed to contact bridge at " + bridgeUrl);
       return null;
+    }
+  }
+
+  async function getInfoOnline(): Promise<boolean> {
+    try {
+      const r = await fetch(`${onlineUrl.replace(/\/$/, "")}/info`);
+      if (!r.ok) {
+        setOnlineStatus("down");
+        setOnlineMsg(`Online API responded with status ${r.status}`);
+        return false;
+      }
+      const data = await r.json();
+      setHardwareJson(JSON.stringify(data, null, 2));
+      return true;
+    } catch (e) {
+      setOnlineStatus("down");
+      setOnlineMsg("Failed to contact online API at " + onlineUrl);
+      return false;
+    }
+  }
+
+  async function runDemoOnline(size=256, iters=3): Promise<boolean> {
+    try {
+      const r = await fetch(`${onlineUrl.replace(/\/$/, "")}/demo/matmul`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ size, iters })
+      });
+      if (!r.ok) {
+        setOnlineStatus("down");
+        setOnlineMsg(`Online API responded with status ${r.status}`);
+        return false;
+      }
+      const data = await r.json();
+      if (typeof data?.stdout === 'string') setDemoOut(data.stdout);
+      return true;
+    } catch (e) {
+      setOnlineStatus("down");
+      setOnlineMsg("Failed to contact online API at " + onlineUrl);
+      return false;
     }
   }
 
@@ -160,21 +257,41 @@ const Demo = () => {
             </div>
           </Card>
 
-          {/* Hardware detection (CLI-guided) */}
+          {/* Hardware detection (Online API + CLI-guided) */}
           <Card className="p-6 bg-card/50 backdrop-blur-sm">
             <div className="flex items-center gap-3 mb-4">
               <Cpu className="h-5 w-5 text-primary" />
-              <h2 className="text-2xl font-semibold">Detect Hardware (CLI)</h2>
+              <h2 className="text-2xl font-semibold">Detect Hardware</h2>
             </div>
             <p className="text-sm text-muted-foreground mb-3">
-              Option A) Click "Run via Bridge" (requires local bridge). Option B) Run the command
-              yourself and paste the output.
+              Option A) Online API. Option B) Local bridge. Option C) run locally and paste output.
             </p>
+            {/* Online API controls */}
+            <div className="mt-2 flex gap-2 items-center flex-wrap">
+              <Globe className="h-4 w-4 text-primary" />
+              <Button variant="outline" size="sm" onClick={()=>pingOnline()}>Check Online API</Button>
+              <span className={`text-xs ${onlineStatus==='ok'?'text-green-600':onlineStatus==='down'?'text-red-600':onlineStatus==='checking'?'text-amber-600':'text-muted-foreground'}`}>
+                Online API: {onlineStatus}
+              </span>
+              <input
+                value={onlineUrl}
+                onChange={(e)=>setOnlineUrl(e.target.value)}
+                className="ml-auto px-2 py-1 rounded border text-xs bg-muted/30 w-72"
+                placeholder="https://demo-api.uhop.dev"
+              />
+              <Button size="sm" onClick={getInfoOnline}>Run via Online API</Button>
+            </div>
+            {onlineMsg && (
+              <div className="mt-2 text-xs text-red-600">{onlineMsg}</div>
+            )}
+            <div className="mt-4" />
             <CodeBlock code={`uhop info --json`} language="bash" />
             <div className="mt-2 flex gap-2 items-center flex-wrap">
               <Button variant="outline" size="sm" onClick={()=>pingBridge()}>Check Bridge</Button>
               <Button variant="ghost" size="sm" onClick={()=>pingBridge("http://127.0.0.1:5823")}>Try 127.0.0.1</Button>
+              <Button variant="ghost" size="sm" onClick={()=>pingBridge("http://127.0.0.1:5825")}>Try 127.0.0.1:5825</Button>
               <Button variant="ghost" size="sm" onClick={()=>pingBridge("http://localhost:5823")}>Try localhost</Button>
+              <Button variant="ghost" size="sm" onClick={()=>pingBridge("http://localhost:5825")}>Try localhost:5825</Button>
               <span className={`text-xs ${bridgeStatus==='ok'?'text-green-600':bridgeStatus==='down'?'text-red-600':bridgeStatus==='checking'?'text-amber-600':'text-muted-foreground'}`}>
                 Bridge: {bridgeStatus}
               </span>
@@ -223,13 +340,20 @@ const Demo = () => {
             )}
           </Card>
 
-          {/* Matmul demo (CLI-guided) */}
+          {/* Matmul demo (Online API + CLI-guided) */}
           <Card className="p-6 bg-card/50 backdrop-blur-sm">
             <div className="flex items-center gap-3 mb-4">
               <Play className="h-5 w-5 text-primary" />
-              <h2 className="text-2xl font-semibold">Run Demo (CLI)</h2>
+              <h2 className="text-2xl font-semibold">Run Demo</h2>
             </div>
-            <p className="text-sm text-muted-foreground mb-3">Option A) Run via local bridge. Option B) run locally and paste output.</p>
+            <p className="text-sm text-muted-foreground mb-3">Option A) Online API. Option B) Local bridge. Option C) run locally and paste output.</p>
+            <div className="mt-2 flex gap-2 items-center flex-wrap">
+              <Globe className="h-4 w-4 text-primary" />
+              <Button size="sm" onClick={()=>runDemoOnline(256,3)}>Run via Online API</Button>
+              {onlineStatus!=='ok' && (
+                <span className="text-xs text-muted-foreground">(Tip: set API base and click Check Online API above)</span>
+              )}
+            </div>
             <CodeBlock code={`uhop demo --size 256 --iters 3`} language="bash" />
             <div className="mt-2 flex gap-2">
               <Button

@@ -1201,6 +1201,28 @@ def web_bridge(port: int):
     run_web_bridge(port)
 
 
+@main.command(name="web-api")
+@click.option("--host", type=str, default="0.0.0.0", show_default=True)
+@click.option("--port", type=int, default=5824, show_default=True)
+def web_api(host: str, port: int):
+    """Run a minimal HTTP API for the online demo.
+
+    Endpoints:
+      - GET /health
+      - GET /info
+      - POST /demo/matmul {"size":256,"iters":3}
+    """
+    try:
+        from .web_api import run as _run
+    except Exception as e:
+        console.print(f"[red]Failed to import web API:[/red] {e}")
+        return
+    console.print(
+        f"[green]Starting web API on http://{host}:{port}[/green]"
+    )
+    _run(host, port)
+
+
 @cache.command("invalidate")
 @click.option(
     "--all",
