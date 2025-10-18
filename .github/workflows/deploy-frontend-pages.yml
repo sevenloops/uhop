@@ -46,6 +46,9 @@ jobs:
           echo "Listing dist/ contents..." && ls -la dist
           echo "Listing frontend/dist/ contents (context check)..." && ls -la frontend/dist || true
 
+      - name: Add CNAME for custom domain
+        run: echo "uhop.dev" > dist/CNAME
+
       - name: Add .nojekyll
         run: echo > dist/.nojekyll
 

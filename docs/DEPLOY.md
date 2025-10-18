@@ -130,3 +130,12 @@ Notes:
 
 - If your repo/fork lives under a different owner or name, update `frontend/vite.config.ts` and `frontend/public/404.html` base path to match (`/your-repo-name/`).
 - Set `VITE_BACKEND_URL` in your frontend build environment to your backend URL. For Pages, you can bake it at build time (e.g., in the deploy workflow or locally before pushing artifacts).
+
+### Custom Domain (uhop.dev)
+
+If you’re using a custom domain like `uhop.dev`:
+
+1. DNS: Create the required records (usually CNAME for `www` to `<username>.github.io` and an A/ALIAS/ANAME for apex if supported, or use a redirect to `www`).
+2. In GitHub repo Settings → Pages, add the custom domain `uhop.dev` and enforce HTTPS.
+3. The workflow creates a `CNAME` file (`dist/CNAME`) with `uhop.dev` so Pages serves the custom domain correctly.
+4. Vite base should be `/` in production (already set). `public/404.html` redirects to `/`.

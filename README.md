@@ -2,7 +2,7 @@
 
 [![Deploy Frontend to GitHub Pages](https://github.com/sevenloops/uhop/actions/workflows/deploy-frontend-pages.yml/badge.svg)](https://github.com/sevenloops/uhop/actions/workflows/deploy-frontend-pages.yml)
 
-Live site (GitHub Pages): <https://sevenloops.github.io/uhop/>
+Live site: <https://uhop.dev>
 
 This repository is an MVP for UHOP — a runtime that:
 
