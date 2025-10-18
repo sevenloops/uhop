@@ -92,7 +92,7 @@ export default function Portal(){
       <div className='max-w-6xl mx-auto p-6'>
         <header className='flex items-center justify-between mb-6'>
           <h1 className='text-2xl md:text-3xl font-bold tracking-wide'>U-HOP Demo Portal</h1>
-          <div className='text-xs text-[#94a3b8]'>Sevenloops — YC W25 Applicant · <a className='underline' href='https://github.com/sevenloops/uhop' target='_blank' rel='noopener noreferrer'>GitHub</a></div>
+          <div className='text-xs text-[#94a3b8]'>Sevenloops — U-HOP· <a className='underline' href='https://github.com/sevenloops/uhop' target='_blank' rel='noopener noreferrer'>GitHub</a></div>
         </header>
 
         <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
