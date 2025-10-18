@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/deploy-frontend-pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -43,8 +40,14 @@ jobs:
 
       - name: Build
         run: npm run -s build
-        env:
-          VITE_BACKEND_URL: ${{ secrets.VITE_BACKEND_URL }}
+
+      - name: List build artifacts
+        run: |
+          echo "Listing dist/ contents..." && ls -la dist
+          echo "Listing frontend/dist/ contents (context check)..." && ls -la frontend/dist || true
+
+      - name: Add .nojekyll
+        run: echo > dist/.nojekyll
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
