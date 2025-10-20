@@ -184,34 +184,29 @@ High level components and flow:
 
 ```mermaid
 flowchart TB
-    subgraph Browser[Frontend Portal (Vite/React)]
-      UI[User UI\ncontrols + logs]
-    end
+  subgraph Browser["Frontend Portal (Vite + React)"]
+    UI["UI: controls and logs"]
+  end
 
-    subgraph API[Backend API (Node/Express + ws)]
-      REST[/REST: /connect, /run-demo, /generate-kernel, /agent-status/]
-      WSS{{WebSocket: /logs, /agent}}
-    end
+  subgraph API["Backend API (Node/Express + ws)"]
+    REST["REST: /connect, /run-demo, /generate-kernel, /agent-status"]
+    WSS["WebSocket: /logs, /agent"]
+  end
 
-    subgraph Agent[Local Agent (Python)]
-      WSClient[(WS Client)]
-      UHOPCore1[UHOP Core\n(hardware detect, backends, AI codegen)]
-    end
+  subgraph Agent["Local Agent (Python)"]
+    WSClient["WS Client"]
+    UHOPCore1["UHOP Core: hardware detect, backends, AI codegen"]
+  end
 
-    subgraph ServerUHOP[Server Runtime (Python)]
-      UHOPCore2[UHOP Core\n(hardware detect, backends, AI codegen)]
-    end
+  subgraph ServerUHOP["Server Runtime (Python)"]
+    UHOPCore2["UHOP Core: hardware detect, backends, AI codegen"]
+  end
 
-    UI -->|HTTP| REST
-    UI -->|WS (live logs)| WSS
-    WSS <-->|pairing + jobs| WSClient
-    REST -->|prefer agent if connected| Agent
-    REST -->|fallback if no agent| ServerUHOP
-
-    classDef node fill:#0b1020,stroke:#3b82f6,color:#e2eafc;
-    classDef svc fill:#121826,stroke:#64748b,color:#e5e7eb;
-    class Browser,API,Agent,ServerUHOP svc;
-    class UI,REST,WSS,WSClient,UHOPCore1,UHOPCore2 node;
+  UI -->|HTTP| REST
+  UI -. logs .-> WSS
+  WSS <-->|pairing + jobs| WSClient
+  REST -->|prefer agent if connected| Agent
+  REST -->|fallback if no agent| ServerUHOP
 ```
 
 - Frontend: React SPA built with Vite and Tailwind/shadcn. Deployed to GitHub Pages under `/uhop/`. Talks to the backend via REST and a logs WebSocket.
