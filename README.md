@@ -2,7 +2,7 @@
 
 [![Deploy Frontend to GitHub Pages](https://github.com/sevenloops/uhop/actions/workflows/deploy-frontend-pages.yml/badge.svg)](https://github.com/sevenloops/uhop/actions/workflows/deploy-frontend-pages.yml)
 
-Live demo: [demo](https://uhop.dev/demo)
+Live demo: [demo](https://uhop.dev)
 
 UHOP is an AI-powered runtime kernel optimizer. It detects your hardware and picks the best available backend, optionally generating and validating kernels with AI, then caches the fastest path for reuse.
 
