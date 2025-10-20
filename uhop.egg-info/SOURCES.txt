@@ -9,6 +9,7 @@ tests/test_optimizer_backend_policy.py
 tests/test_pytorch_conv_grad.py
 tests/test_validation.py
 uhop/__init__.py
+uhop/agent.py
 uhop/cache.py
 uhop/cli.py
 uhop/hardware.py
@@ -17,6 +18,7 @@ uhop/profiler.py
 uhop/pytorch_wrappers.py
 uhop/sandbox.py
 uhop/validation.py
+uhop/web_api.py
 uhop/web_bridge.py
 uhop.egg-info/PKG-INFO
 uhop.egg-info/SOURCES.txt

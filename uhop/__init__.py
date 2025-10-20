@@ -1,15 +1,27 @@
 """
-Top-level UHOP package exports.
+Top-level UHOP package exports (lightweight).
 
-Exports a friendly API:
-- UHopOptimizer: runtime optimizer that chooses the best backend.
-- optimize: decorator to optimize user functions per operation
-  (e.g., "matmul").
-- detect_hardware: quick hardware snapshot for CLI and runtime decisions.
-- UhopCache: simple on-disk cache for backend choices and artifacts.
+To keep imports fast and avoid importing heavy optional backends (e.g., torch)
+on package import, we lazily import public symbols on first access.
 """
-from .optimizer import UHopOptimizer, optimize
-from .hardware import detect_hardware
-from .cache import UhopCache
+from __future__ import annotations
+
+from typing import Any
 
 __all__ = ["UHopOptimizer", "optimize", "detect_hardware", "UhopCache"]
+
+
+def __getattr__(name: str) -> Any:  # lazy attribute loader
+  if name in ("UHopOptimizer", "optimize"):
+    from .optimizer import UHopOptimizer, optimize
+
+    return {"UHopOptimizer": UHopOptimizer, "optimize": optimize}[name]
+  if name == "detect_hardware":
+    from .hardware import detect_hardware
+
+    return detect_hardware
+  if name == "UhopCache":
+    from .cache import UhopCache
+
+    return UhopCache
+  raise AttributeError(f"module 'uhop' has no attribute {name!r}")

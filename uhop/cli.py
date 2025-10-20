@@ -11,8 +11,18 @@ from .backends import (
     is_triton_available,
     is_opencl_available,
 )
-from .backends.opencl_backend import set_opencl_device as _set_opencl_device
-from .backends.opencl_backend import opencl_conv2d_relu as _ocl_conv2d_relu
+
+# Conditional imports for OpenCL functions
+try:
+    if is_opencl_available():
+        from .backends.opencl_backend import set_opencl_device as _set_opencl_device
+        from .backends.opencl_backend import opencl_conv2d_relu as _ocl_conv2d_relu
+    else:
+        _set_opencl_device = None
+        _ocl_conv2d_relu = None
+except ImportError:
+    _set_opencl_device = None
+    _ocl_conv2d_relu = None
 from . import optimize
 from .ai_codegen import AICodegen
 from .cache import UhopCache as _UhopCache
@@ -100,7 +110,8 @@ def info(as_json: bool, ocl_device: int | None):
                 f"{ocl_device}: {e}"
             )
 
-    console.print("[bold cyan]UHOP Hardware Report[/bold cyan]")
+    if not as_json:
+        console.print("[bold cyan]UHOP Hardware Report[/bold cyan]")
     hw_str = _hardware_summary()
     if as_json:
         from .hardware import detect_hardware
@@ -276,7 +287,13 @@ def demo(size: int, iters: int, ocl_device: int | None):
     console.print("[bold cyan]UHOP Demo[/bold cyan]")
     if ocl_device is not None:
         try:
-            _set_opencl_device(ocl_device)
+            if _set_opencl_device is not None:
+                _set_opencl_device(ocl_device)
+            else:
+                console.print(
+                    "[yellow]Warning:[/yellow] OpenCL not available, "
+                    f"cannot set device index {ocl_device}"
+                )
         except Exception as e:
             console.print(
                 "[yellow]Warning:[/yellow] could not set OpenCL device index "
@@ -395,6 +412,10 @@ def demo_conv2d_relu(
         return float(np.median(times))
 
     # Warm-up
+    if _ocl_conv2d_relu is None:
+        console.print("[red]Error:[/red] OpenCL Conv2D+ReLU not available")
+        return
+    
     _ = _ocl_conv2d_relu(x, wgt, stride=stride, padding=padding)
     t_uhop = _med(
         lambda: _ocl_conv2d_relu(x, wgt, stride=stride, padding=padding)

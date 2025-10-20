@@ -1,7 +1,7 @@
 __kernel void generated_matmul(const int M, const int N, const int K,
-                               __global const float* A,
-                               __global const float* B,
-                               __global float* C) {
+                                  __global const float* A,
+                                  __global const float* B,
+                                  __global float* C) {
     int row = get_global_id(0);
     int col = get_global_id(1);
 

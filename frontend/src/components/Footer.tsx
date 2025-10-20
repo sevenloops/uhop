@@ -1,4 +1,5 @@
 import { Github, Linkedin, Mail } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const Footer = () => {
   return (
@@ -7,8 +8,13 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-secondary" />
-              <span className="text-lg font-bold gradient-text">UHop</span>
+             <Link to="/" className="flex items-center">
+                         <img
+                           src="public/wuhop.png"
+                           alt="UHOP"
+                           className="h-8 w-auto object-contain"
+                         />
+                       </Link>
             </div>
             <p className="text-sm text-muted-foreground">
               AI-Generated Kernel Intelligence — Optimize once, run anywhere.

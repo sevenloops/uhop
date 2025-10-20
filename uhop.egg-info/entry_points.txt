@@ -1,2 +1,3 @@
 [console_scripts]
 uhop = uhop.cli:main
+uhop-agent = uhop.agent:main
