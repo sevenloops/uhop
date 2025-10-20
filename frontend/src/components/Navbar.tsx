@@ -22,7 +22,7 @@ const Navbar = () => {
         <div className="flex h-16 items-center justify-between">
           <Link to="/" className="flex items-center">
             <img
-              src="public/wuhop.png"
+              src={`${import.meta.env.BASE_URL}WUhop.png`}
               alt="UHOP"
               className="h-8 w-auto object-contain"
             />

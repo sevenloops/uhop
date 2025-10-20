@@ -126,3 +126,24 @@ Notes:
 
 - The workflow adds a footer to the issue body with the source path and a warning not to edit below the separator. Edit the Markdown file instead.
 - The workflow merges any existing labels with those from front matter and always ensures the `synced-from-folder` label is present.
+
+---
+
+## UHOP Agent — Run the demo on your machine
+
+You can pair a lightweight local agent with the hosted portal so benchmarks execute on your hardware.
+
+Quickstart:
+
+```bash
+pip install uhop
+uhop-agent --server wss://api.yourdomain.com/agent --token YOUR_AGENT_TOKEN
+```
+
+Then open the demo portal; the Status panel should show `Agent: Connected`. Use the same buttons (Connect Devices, Run Matmul Test, Generate AI Kernel) — they’ll run locally. For details and troubleshooting, see [`docs/AGENT_QUICKSTART.md`](docs/AGENT_QUICKSTART.md).
+
+If you’re deploying the frontend to GitHub Pages, the site will be available at:
+
+- <https://sevenloops.github.io/uhop/>
+
+Set `VITE_BACKEND_URL` when building if you have a public backend API domain, e.g. `https://api.yourdomain.com`.

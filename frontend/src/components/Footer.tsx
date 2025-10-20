@@ -69,7 +69,7 @@ const Footer = () => {
         </div>
 
         <div className="mt-12 pt-8 border-t border-border/50 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} UHop. Built by Bisina Daniel. Open source under MIT License.</p>
+          <p>&copy; {new Date().getFullYear()} UHop. Built by Sevenloops. Open source under MIT License.</p>
         </div>
       </div>
     </footer>
