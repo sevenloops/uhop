@@ -1,72 +1,138 @@
-# UHop MVP (developer-integrated)
+# UHOP — Universal Hardware Optimization Protocol
 
 [![Deploy Frontend to GitHub Pages](https://github.com/sevenloops/uhop/actions/workflows/deploy-frontend-pages.yml/badge.svg)](https://github.com/sevenloops/uhop/actions/workflows/deploy-frontend-pages.yml)
 
-Live site: <https://uhop.dev>
+Live demo: https://sevenloops.github.io/uhop/
 
-This repository is an MVP for UHOP — a runtime that:
+UHOP is an AI-powered runtime kernel optimizer. It detects your hardware and picks the best available backend, optionally generating and validating kernels with AI, then caches the fastest path for reuse.
 
-- Detects hardware (CUDA vs CPU),
-- Runs hand-written CUDA kernels (if PyCUDA available),
-- Generates CUDA kernels via OpenAI (if configured),
-- Benchmarks and caches the best implementation,
-- Exposes a decorator `@hop.optimize("matmul")` for easy integration.
+What UHOP supports today:
 
-## Quickstart
+- Backend detection and selection: Torch (CUDA, MPS, CPU), OpenCL (GPU/CPU), Triton (Linux), CPU fallback
+- `@uhop.optimize("op")` decorator for drop-in acceleration (e.g., matmul)
+- AI kernel generation (OpenAI) for OpenCL/CUDA/Python/Triton with optional validation and smoke tests
+- On-disk caching of best kernel/implementation per device
+- CLI for info, demos, AI codegen, and cache management
+- Optional local Agent that lets the web portal run on your hardware
 
-1. Clone project.
-2. Install dependencies:
+Planned additions (see `issues/`): multi-backend benchmarking matrix, AI kernel training loop, distributed optimization, tighter framework integration (PyTorch/JAX), richer dashboard.
 
-   ```bash
-   pip install -r requirements.txt
-   # or at minimum:
-   pip install numpy openai
-   # Optional for CUDA:
-   pip install pycuda
-   ```
+---
 
-## CLI
+## Requirements
 
-After installing this package in your environment, you get a `uhop` command:
+- Python 3.10+
+- OS: Windows/macOS/Linux
+- Optional accelerators/drivers as applicable:
+  - NVIDIA CUDA (for Torch CUDA / CUDA backends)
+  - Vendor OpenCL runtime (AMD/Intel/NVIDIA) for OpenCL paths
+  - Apple MPS (macOS, via Torch) for Apple Silicon
+- Optional: OpenAI API key (`OPENAI_API_KEY`) for AI codegen
+- Optional (for the web UI): Node.js 20+ if you want to build the frontend locally
 
-- `uhop info` — print detected hardware and backend availability (Torch, Triton, OpenCL).
-- `uhop info --json` — machine-readable JSON hardware info (includes backend availability).
-- `uhop info --ocl-device 0` — override OpenCL GPU device selection by index (across all platforms).
-- `uhop demo --size 192` — run a quick Naive Python vs UHOP-optimized matmul benchmark and show which wins.
-- `uhop demo --iters 5 --ocl-device 0` — adjust iterations and explicitly choose an OpenCL GPU.
+## Install
 
-Environment override: set `UHOP_OPENCL_DEVICE_INDEX=<idx>` to select a default OpenCL device for the session.
+Clone and install the Python package:
 
-## extra demos
+```bash
+git clone https://github.com/sevenloops/uhop.git
+cd uhop
+pip install -e .
+# or dev extras
+pip install -e .[dev]
+# alternatively
+pip install -r requirements.txt
+```
 
-- MatMul (UHOP vs naive):
-  - `uhop demo --size 192`
-  - Expect UHOP to win decisively vs naive Python; increase size for more stress.
-- Fused Conv2D+ReLU (OpenCL fused kernel):
-  - `python -m uhop.cli demo-conv2d-relu --h 128 --w 128 --c-in 3 --c-out 32 --k 3 --stride 1 --padding 1`
-  - Use `--ocl-device` to select a GPU, and try larger shapes (e.g. `--h 224 --w 224 --c-in 16 --c-out 32`) for stronger GPU gains.
+Extras (optional):
 
-See `docs/RUN_REPORT.md` for a summary of errors encountered and solutions applied during development, plus sample benchmark outputs.
+```bash
+# AMD ROCm Python tooling
+pip install -e .[amd]
+# NVIDIA CuPy for CUDA experiments
+pip install -e .[nvidia]
+```
 
-## Syncing GitHub Issues from `issues/` (optional)
+## Quickstart (CLI)
 
-## Online demo API (optional)
+- Hardware overview:
 
-To let people try the demo directly on the website (without running a local bridge), you can run a tiny HTTP API that exposes safe endpoints:
+```bash
+uhop info
+uhop info --json
+```
 
-Endpoints:
+- Matmul demo vs naive Python baseline:
 
-- GET /health
-- GET /info — same JSON as `uhop info --json`
-- POST /demo/matmul — runs a small, bounded matmul demo and returns timings
+```bash
+uhop demo --size 192 --iters 3
+# choose a specific OpenCL GPU if multiple
+uhop demo --ocl-device 0
+```
 
-Run locally:
+- Fused Conv2D+ReLU demo (OpenCL):
+
+```bash
+python -m uhop.cli demo-conv2d-relu --h 128 --w 128 --c-in 3 --c-out 32 --k 3 --stride 1 --padding 1
+```
+
+- AI code generation and validation (examples):
+
+```bash
+# Generate OpenCL matmul kernel, validate build, run smoke test
+python -m uhop.cli ai-generate matmul --target opencl --validate --smoke
+
+# Generate fused Conv2D+ReLU and benchmark vs baseline
+python -m uhop.cli ai-generate-fused --stride 1 --padding 1
+```
+
+- Cache management:
+
+```bash
+uhop cache list
+uhop cache show matmul
+uhop cache clear
+uhop cache invalidate --device cuda  # examples: mps, cuda, intel, amd
+```
+
+Environment knobs:
+
+- `UHOP_OPENCL_DEVICE_INDEX=<idx>` — default OpenCL device override
+- `UHOP_STRICT_VALIDATE=1` — tighten AI-kernel validation tolerances
+
+## Online demo + Local Agent
+
+- Static portal (GitHub Pages): https://sevenloops.github.io/uhop/
+- By default, the portal runs on the server-side backend when available.
+- To run on your own hardware, start the local agent, then open the portal; it will show “Agent: Connected” and prefer your device.
+
+Quick agent start:
+
+```bash
+pip install uhop  # or: pip install -e .
+# Production (TLS)
+uhop-agent --server wss://api.yourdomain.com/agent --token YOUR_AGENT_TOKEN
+# Local dev
+uhop-agent --server ws://127.0.0.1:8787/agent
+```
+
+More details and troubleshooting: `docs/AGENT_QUICKSTART.md`.
+
+## Minimal web API (optional)
+
+Expose a safe HTTP API locally for the portal or external clients:
 
 ```bash
 uhop web-api --host 0.0.0.0 --port 5824
 # or
 python -m uhop.web_api --host 0.0.0.0 --port 5824
 ```
+
+Endpoints:
+
+- GET `/health`
+- GET `/info` (same as `uhop info --json`)
+- POST `/demo/matmul` with `{ "size": 256, "iters": 3 }`
 
 Docker:
 
@@ -75,75 +141,37 @@ docker build -t uhop-demo-api -f api.Dockerfile .
 docker run --rm -p 5824:5824 uhop-demo-api
 ```
 
-Point the docs/demo site to this API by setting `VITE_UHOP_API_BASE`, e.g.:
+## Testing
+
+Run the test suite (GPU-dependent tests will skip if no suitable device is available):
 
 ```bash
-VITE_UHOP_API_BASE="https://demo-api.uhop.dev" npm run build
+pytest -q
 ```
 
-
-This repo includes a GitHub Actions workflow that automatically creates and updates GitHub Issues based on Markdown files under the `issues/` folder.
-
-## Deploying the public demo
-
-Want YC reviewers to try the demo online without local setup? Deploy the backend to Railway/Render/Fly and the frontend to Vercel or GitHub Pages. See `docs/DEPLOY.md` for step-by-step instructions.
-
-What it does:
-
-- On every push that changes files in `issues/**` (or when manually triggered), the workflow scans `issues/` for `.md` files.
-- For each file, it creates or updates a GitHub Issue with a stable footer marker: `Source: issues/<path/to/file.md>`.
-- It adds the label `synced-from-folder` to identify issues managed by CI.
-- If a source file is deleted, the corresponding Issue is automatically closed with a comment.
-
-File format:
-
-- Title will be derived from front matter (`title:`), the first `# Heading` in the Markdown, or the filename.
-- Optional front matter is supported between `---` lines at the top. Supported keys:
-  - `title: <string>`
-  - `labels: [label-a, label-b]` or `labels: label-a, label-b`
-  - `assignees: [user1, user2]` or `assignees: user1, user2`
-
-Example (`issues/01-example.md`):
-
-```markdown
----
-title: Improve GPU kernel selection
-labels: [optimization, mvp]
-assignees: user1, user2
----
-
-# Improve GPU kernel selection
-
-Describe the change, acceptance criteria, and references here.
-```
-
-How to run it:
-
-- Push changes to files under `issues/` to trigger the workflow automatically.
-- Or run it manually from the Actions tab: "Sync GitHub Issues from files" → Run workflow.
-
-Notes:
-
-- The workflow adds a footer to the issue body with the source path and a warning not to edit below the separator. Edit the Markdown file instead.
-- The workflow merges any existing labels with those from front matter and always ensures the `synced-from-folder` label is present.
-
----
-
-## UHOP Agent — Run the demo on your machine
-
-You can pair a lightweight local agent with the hosted portal so benchmarks execute on your hardware.
-
-Quickstart:
+Targeted runs:
 
 ```bash
-pip install uhop
-uhop-agent --server wss://api.yourdomain.com/agent --token YOUR_AGENT_TOKEN
+pytest -q tests/test_matmul.py
+pytest -q -k "opencl or cuda or cpu"
 ```
 
-Then open the demo portal; the Status panel should show `Agent: Connected`. Use the same buttons (Connect Devices, Run Matmul Test, Generate AI Kernel) — they’ll run locally. For details and troubleshooting, see [`docs/AGENT_QUICKSTART.md`](docs/AGENT_QUICKSTART.md).
+## Contributing
 
-If you’re deploying the frontend to GitHub Pages, the site will be available at:
+Contributions are welcome! Please see `CONTRIBUTING.md` for how to propose changes and our development tips. A few quick notes:
 
-- <https://sevenloops.github.io/uhop/>
+- Keep public APIs stable unless there is a compelling reason to change
+- Add or update tests when you change public behavior
+- Prefer minimal, pinned dependencies and reproducible steps
 
-Set `VITE_BACKEND_URL` when building if you have a public backend API domain, e.g. `https://api.yourdomain.com`.
+## Roadmap (high level)
+
+- Multi-backend benchmarking and selection policies (CUDA/OpenCL/Torch/Triton/CPU)
+- Improved device detection and preferences (multi-GPU, vendor nuances)
+- Automated correctness and performance validation for AI-generated kernels
+- Local agent UX, security hardening, and dashboard polish
+- Framework integrations and distributed optimization
+
+## License
+
+MIT © UHOP Systems
