@@ -10,9 +10,9 @@ const Footer = () => {
             <div className="flex items-center space-x-2">
              <Link to="/" className="flex items-center">
                          <img
-                           src="public/wuhop.png"
+                           src={`${import.meta.env.BASE_URL}WUhop.png`}
                            alt="UHOP"
-                           className="h-8 w-auto object-contain"
+                           className="h-10 w-auto object-contain"
                          />
                        </Link>
             </div>
