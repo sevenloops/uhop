@@ -1,0 +1,13 @@
+// elementwise kernel template (OpenCL)
+__kernel void {{ KERNEL_NAME }}(
+    __global const {{ DTYPE }}* a,
+    __global const {{ DTYPE }}* b,
+    __global {{ DTYPE }}* out,
+    ulong N)
+{
+    size_t gid = get_global_id(0);
+    size_t gsize = get_global_size(0);
+    for (size_t i = gid; i < N; i += gsize) {
+        out[i] = {{ OP_EXPR }};
+    }
+}

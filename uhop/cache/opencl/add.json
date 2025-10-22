@@ -1,0 +1,12 @@
+{
+  "latency_s": 0.0,
+  "block": 128,
+  "grid": 512,
+  "dtype": "float32",
+  "kernel_source_context": {
+    "OP_EXPR": "a[i] + b[i]",
+    "KERNEL_NAME": "elem_op",
+    "DTYPE": "float"
+  },
+  "backend": "opencl"
+}

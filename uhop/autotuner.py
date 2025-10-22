@@ -3,24 +3,28 @@ Autotuner for elementwise ops (minimal PoC).
 
 Features:
 - Compile candidate kernels (from kernel template files)
-- Benchmark each candidate using cupy backend
+- Benchmark each candidate using selected backend
 - Store best (kernel_id + launch config) to cache (JSON)
 
 This module is intentionally compact so it can be expanded to other ops.
 """
 import json
-import os
 from pathlib import Path
 import math
 from typing import Dict, Any
 from jinja2 import Template
+
 try:
     import cupy as cp  # type: ignore
 except Exception:
     cp = None
 
-from . import ops_registry
-from .backends import cupy_wrapper
+import importlib
+# Import backend wrappers explicitly to avoid package __getattr__ interception
+cupy_wrapper = importlib.import_module('uhop.backends.cupy_wrapper')
+opencl_wrapper = importlib.import_module('uhop.backends.opencl_wrapper')
+hip_wrapper = importlib.import_module('uhop.backends.hip_wrapper')
+metal_wrapper = importlib.import_module('uhop.backends.metal_wrapper')
 
 CACHE_DIR = Path("uhop/cache")
 KERNELS_DIR = Path("uhop/kernels")
@@ -62,7 +66,7 @@ def _default_block_candidates():
 
 
 def _cuda_dtype(dtype: str) -> str:
-    # Map numpy-style dtype strings to CUDA C types
+    # Map numpy-style dtype strings to CUDA/HIP C types
     d = dtype.lower()
     if d in ("float32", "float"):
         return "float"
@@ -76,32 +80,44 @@ def _cuda_dtype(dtype: str) -> str:
     return "float"
 
 
-def compile_kernel_from_template(template_path: Path, kernel_name: str, context: Dict[str, Any]):
-    source = _render_kernel_template(template_path, context)
-    return cupy_wrapper.CupyKernel(source, kernel_name)
-
-
 def autotune_elementwise(op_name: str, size: int, dtype: str = "float32", device: str = "cuda"):
     """
-    Autotune elementwise op `op_name` for a single flat size.
+    Autotune elementwise op 'op_name' for a single flat size.
     Returns cached best config or runs tuning and caches the result.
     """
-    if device != "cuda":
-        raise NotImplementedError("This autotuner currently supports the 'cuda' device only.")
-
     cached = _load_cache(device, op_name)
     if cached:
         return cached
 
-    templates_dir = KERNELS_DIR / "cuda"
-    # For now we only have elementwise_add template; map op_name->filename
+    # Select backend templates and wrappers
     mapping = {
-        "add": "elementwise_add.cu.jinja",
-        "mul": "elementwise_add.cu.jinja",  # same kernel with different op
+        "cuda": {
+            "dir": KERNELS_DIR / "cuda",
+            "map": {"add": "elementwise_add.cu.jinja", "mul": "elementwise_add.cu.jinja"},
+        },
+        "opencl": {
+            "dir": KERNELS_DIR / "opencl",
+            "map": {"add": "elementwise_add.cl.jinja", "mul": "elementwise_add.cl.jinja"},
+        },
+        "hip": {
+            "dir": KERNELS_DIR / "hip",
+            "map": {"add": "elementwise_add.hip.jinja", "mul": "elementwise_add.hip.jinja"},
+        },
+        "metal": {
+            "dir": KERNELS_DIR / "metal",
+            "map": {"add": "elementwise_add.metal.jinja", "mul": "elementwise_add.metal.jinja"},
+        },
     }
-    filename = mapping.get(op_name)
+
+    backend = mapping.get(device)
+    if backend is None:
+        raise ValueError(f"Unsupported device/backend: {device}")
+
+    templates_dir = backend["dir"]
+    mapping_for_op = backend["map"]
+    filename = mapping_for_op.get(op_name)
     if filename is None:
-        raise ValueError(f"No kernel template mapped for op {op_name}")
+        raise ValueError(f"No kernel template mapped for op {op_name} on backend {device}")
 
     template_path = templates_dir / filename
     if not template_path.exists():
@@ -114,12 +130,21 @@ def autotune_elementwise(op_name: str, size: int, dtype: str = "float32", device
     import numpy as np
     a = np.random.rand(size).astype(dtype)
     b = np.random.rand(size).astype(dtype)
-    # put arrays on device once per candidate to avoid transfer timing
-    da = cp.asarray(a)
-    db = cp.asarray(b)
-    dout = cp.empty_like(da)
 
-    c_dtype = _cuda_dtype(dtype)
+    # pre-create device arrays for CUDA/HIP
+    if device == "cuda":
+        if cp is None:
+            raise RuntimeError("CUDA backend requested but CuPy is not available.")
+        da = cp.asarray(a)
+        db = cp.asarray(b)
+        dout = cp.empty_like(da)
+    elif device == "hip":
+        if hip_wrapper.cp is None:
+            raise RuntimeError("HIP backend requested but cupy-rocm is not available.")
+        cp_rocm = hip_wrapper.cp
+        da = cp_rocm.asarray(a)
+        db = cp_rocm.asarray(b)
+        dout = cp_rocm.empty_like(da)
 
     for block in candidates:
         threads = block
@@ -136,16 +161,39 @@ def autotune_elementwise(op_name: str, size: int, dtype: str = "float32", device
             "KERNEL_NAME": "elem_op",
             "DTYPE": dtype_token,
         }
+
         try:
-            kernel = compile_kernel_from_template(template_path, "elem_op", context)
+            source = _render_kernel_template(template_path, context)
         except Exception:
-            # compilation failed; skip candidate
             continue
 
-        # args: pointers + size (use cupy arrays and Python int)
-        args = (da, db, dout, size)
         try:
-            latency = cupy_wrapper.time_kernel_run(kernel, (grid, 1, 1), (threads, 1, 1), args, warmups=2, runs=6)
+            if device == "cuda":
+                kernel = cupy_wrapper.CupyKernel(source, "elem_op")
+                args = (da, db, dout, size)
+                latency = cupy_wrapper.time_kernel_run(kernel, (grid, 1, 1), (threads, 1, 1), args, warmups=2, runs=6)
+            elif device == "opencl":
+                # build OpenCL kernel and time via profiling
+                kernel = opencl_wrapper.OpenCLKernel(source, "elem_op")
+                cl = opencl_wrapper.cl
+                mf = cl.mem_flags
+                da_buf = cl.Buffer(kernel.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=a)
+                db_buf = cl.Buffer(kernel.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=b)
+                dout_buf = cl.Buffer(kernel.ctx, mf.WRITE_ONLY, a.nbytes)
+                global_size = (int(grid * threads),)
+                local_size = (int(threads),)
+                args = (da_buf, db_buf, dout_buf, np.uint64(size))
+                latency = opencl_wrapper.time_kernel_run(kernel, global_size, local_size, args, warmups=2, runs=6)
+            elif device == "hip":
+                kernel = hip_wrapper.HipKernel(source, "elem_op")
+                args = (da, db, dout, size)
+                latency = hip_wrapper.time_kernel_run(kernel, (grid, 1, 1), (threads, 1, 1), args, warmups=2, runs=6)
+            elif device == "metal":
+                # just attempt compilation to ensure template is valid; runtime not measured
+                kernel = metal_wrapper.MetalKernel(source, "elem_op")
+                latency = float(size) * 1e-9  # placeholder
+            else:
+                continue
         except Exception:
             continue
 
@@ -156,6 +204,7 @@ def autotune_elementwise(op_name: str, size: int, dtype: str = "float32", device
                 "grid": grid,
                 "dtype": dtype,
                 "kernel_source_context": context,
+                "backend": device,
             }
 
     if best["latency_s"] == float("inf"):

@@ -2,125 +2,121 @@
 
 [![Deploy Frontend to GitHub Pages](https://github.com/sevenloops/uhop/actions/workflows/deploy-frontend-pages.yml/badge.svg)](https://github.com/sevenloops/uhop/actions/workflows/deploy-frontend-pages.yml)
 
-Live demo: [demo](https://uhop.dev)
+Live demo: [uhop.dev](https://uhop.dev)
 
-UHOP is an AI-powered runtime kernel optimizer. It detects your hardware and picks the best available backend, optionally generating and validating kernels with AI, then caches the fastest path for reuse.
+UHOP is an open hardware optimization platform that unifies GPU acceleration across CUDA, ROCm/HIP, Metal, OpenCL, and future architectures. It detects your machine, dispatches to the best backend, can generate kernels with AI, validates them, and caches the fastest path for reuse — so developers can write simple code and run fast everywhere. 
 
-What UHOP supports today:
+Key capabilities today:
 
-- Backend detection and selection: Torch (CUDA, MPS, CPU), OpenCL (GPU/CPU), Triton (Linux), CPU fallback
-- `@uhop.optimize("op")` decorator for drop-in acceleration (e.g., matmul)
-- AI kernel generation (OpenAI) for OpenCL/CUDA/Python/Triton with optional validation and smoke tests
-- On-disk caching of best kernel/implementation per device
-- CLI for info, demos, AI codegen, and cache management
-- Optional local Agent that lets the web portal run on your hardware
+- Automatic backend detection: Torch (CUDA/MPS/CPU), OpenCL (GPU/CPU), Triton (Linux), CPU fallback
+- Drop‑in acceleration via `@uhop.optimize("op")` decorator (e.g., matmul)
+- AI kernel generation (OpenAI) for OpenCL/CUDA/Python/Triton with validation/smoke tests
+- On‑disk caching of selected kernels/implementations per device
+- Friendly CLI for hardware info, demos, AI codegen, and cache tools
+- Optional Local Agent so the web portal can run on your hardware
 
-Planned additions (see `issues/`): multi-backend benchmarking matrix, AI kernel training loop, distributed optimization, tighter framework integration (PyTorch/JAX), richer dashboard.
+Vision: a universal, community-driven runtime optimizer that makes high‑performance computing approachable, portable, and fun — across vendors and form factors.
+
+Planned (see `issues/`): multi‑backend benchmarking/policies, correctness suites, distributed training loops for AI‑generated kernels, richer dashboard, and tighter framework integrations (PyTorch/JAX).
 
 ---
 
-## Requirements
+## Architecture
+
+![UHOP Architecture diagram](docs/architecture.svg)
+
+The platform has four layers working together:
+
+1) Frontend (Vite + React) — live controls, real‑time logs, and benchmarks
+2) Backend (Node/Express + ws) — routes jobs to your Local Agent or server runtime
+3) Local Agent (Python) — runs UHOP operations on your machine securely
+4) UHOP Core (Python) — backends, optimizer, AI codegen/validation, caching
+
+See also: `docs/architecture.svg` (source image) for sharing in blogs/slides.
+
+At a glance, the request flow prefers the Local Agent when connected, and falls back to server‑side execution when not.
+
+---
+
+## Getting Started
+
+Prereqs
 
 - Python 3.10+
-- OS: Windows/macOS/Linux
-- Optional accelerators/drivers as applicable:
-  - NVIDIA CUDA (for Torch CUDA / CUDA backends)
-  - Vendor OpenCL runtime (AMD/Intel/NVIDIA) for OpenCL paths
-  - Apple MPS (macOS, via Torch) for Apple Silicon
-- Optional: OpenAI API key (`OPENAI_API_KEY`) for AI codegen
-- Optional (for the web UI): Node.js 20+ if you want to build the frontend locally
+- OS: Windows, macOS, or Linux
+- Drivers/toolchains as applicable: CUDA (NVIDIA), OpenCL runtime (AMD/Intel/NVIDIA), Apple MPS (macOS)
+- Optional: `OPENAI_API_KEY` for AI codegen
 
-## Install
-
-Clone and install the Python package:
+Install
 
 ```bash
 git clone https://github.com/sevenloops/uhop.git
 cd uhop
-pip install -e .
-# or dev extras
-pip install -e .[dev]
-# alternatively
-pip install -r requirements.txt
+pip install -e .            # install CLI `uhop`
+# optional extras
+pip install -e .[dev]       # tests & notebooks
+pip install -e .[amd]       # ROCm Python tools
+pip install -e .[nvidia]    # CuPy for CUDA
 ```
 
-Extras (optional):
-
-```bash
-# AMD ROCm Python tooling
-pip install -e .[amd]
-# NVIDIA CuPy for CUDA experiments
-pip install -e .[nvidia]
-```
-
-## Quickstart (CLI)
-
-- Hardware overview:
+Verify your setup
 
 ```bash
 uhop info
 uhop info --json
 ```
 
-- Matmul demo vs naive Python baseline:
+Run a demo
 
 ```bash
+# Matmul: naive Python vs UHOP‑optimized
 uhop demo --size 192 --iters 3
-# choose a specific OpenCL GPU if multiple
-uhop demo --ocl-device 0
+
+# Fused Conv2D+ReLU (OpenCL). Choose device if multiple are present:
+uhop demo-conv2d-relu --h 128 --w 128 --c-in 3 --c-out 32 --k 3 --stride 1 --padding 1
+uhop demo-conv2d-relu --ocl-device 0
 ```
 
-- Fused Conv2D+ReLU demo (OpenCL):
+Try OpenCL elementwise add vs naive
 
 ```bash
-python -m uhop.cli demo-conv2d-relu --h 128 --w 128 --c-in 3 --c-out 32 --k 3 --stride 1 --padding 1
+python examples/compare_elementwise_add_opencl_vs_naive.py --size 2000000
 ```
 
-- AI code generation and validation (examples):
+Integrate in your code
+
+```python
+from uhop import optimize
+
+@optimize("matmul")
+def my_matmul(a, b):
+    # write the simplest correct version — UHOP will dispatch/accelerate
+    import numpy as np
+    return np.array(a) @ np.array(b)
+```
+
+Environment knobs
+
+- `UHOP_OPENCL_DEVICE_INDEX=<idx>` — default OpenCL device override
+- `UHOP_STRICT_VALIDATE=1` — tighten AI‑kernel validation during codegen
+
+---
+
+## AI Kernel Generation (optional)
 
 ```bash
-# Generate OpenCL matmul kernel, validate build, run smoke test
+# Generate OpenCL matmul, validate build, run smoke test
 python -m uhop.cli ai-generate matmul --target opencl --validate --smoke
 
-# Generate fused Conv2D+ReLU and benchmark vs baseline
+# Generate fused Conv2D+ReLU and benchmark vs current fused backend
 python -m uhop.cli ai-generate-fused --stride 1 --padding 1
 ```
 
-- Cache management:
+---
 
-```bash
-uhop cache list
-uhop cache show matmul
-uhop cache clear
-uhop cache invalidate --device cuda  # examples: mps, cuda, intel, amd
-```
+## Minimal Web API (optional)
 
-Environment knobs:
-
-- `UHOP_OPENCL_DEVICE_INDEX=<idx>` — default OpenCL device override
-- `UHOP_STRICT_VALIDATE=1` — tighten AI-kernel validation tolerances
-
-## Online demo + Local Agent
-
-- Static portal (GitHub Pages): https://sevenloops.github.io/uhop/
-- By default, the portal runs on the server-side backend when available.
-- To run on your own hardware, start the local agent, then open the portal; it will show “Agent: Connected” and prefer your device.
-
-Quick agent start:
-
-```bash
-pip install uhop  # or: pip install -e .
-# Production (TLS)
-uhop-agent --server wss://api.yourdomain.com/agent --token YOUR_AGENT_TOKEN
-# Local dev
-uhop-agent --server ws://127.0.0.1:8787/agent
-```
-
-More details and troubleshooting: `docs/AGENT_QUICKSTART.md`.
-
-## Minimal web API (optional)
-
-Expose a safe HTTP API locally for the portal or external clients:
+Expose a local HTTP API for demos/automation:
 
 ```bash
 uhop web-api --host 0.0.0.0 --port 5824
@@ -128,49 +124,100 @@ uhop web-api --host 0.0.0.0 --port 5824
 python -m uhop.web_api --host 0.0.0.0 --port 5824
 ```
 
-Endpoints:
+Endpoints
 
 - GET `/health`
-- GET `/info` (same as `uhop info --json`)
+- GET `/info`
 - POST `/demo/matmul` with `{ "size": 256, "iters": 3 }`
 
-Docker:
+Docker
 
 ```bash
 docker build -t uhop-demo-api -f api.Dockerfile .
 docker run --rm -p 5824:5824 uhop-demo-api
 ```
 
+---
+
+## Contributing
+
+We’re building UHOP as a friendly, long‑term open platform. All experience levels welcome — and we especially invite:
+
+- GPU engineers (CUDA/ROCm/Metal/OpenCL)
+- Compiler/runtime developers (Triton/MLIR/TVM)
+- ML engineers and researchers (kernels, validation, datasets)
+- Frontend devs (Vite/React/Tailwind, data viz)
+
+Start here:
+
+- Read `CONTRIBUTING.md` for local setup, tests, and PR tips
+- Run `./contributing.sh setup` and `./contributing.sh test`
+- Explore `issues/` for scoped design notes and milestones
+
+Expectations:
+
+- Keep public APIs stable; update docs/tests with behavior changes
+- Aim for reproducible steps and minimal dependencies
+- Small, focused PRs with clear titles (Conventional Commits encouraged)
+
+---
+
+## Roadmap
+
+| Milestone | Focus | Status |
+| --- | --- | --- |
+| Pre‑MVP | Runtime decorator, hardware detection, caching, CLI demo | In progress |
+| MVP | Multi‑backend benchmarking and selection policies | Planned |
+| AI Kernels v1 | Automated validation, correctness suites, smoke tests | Planned |
+| Dashboard | Logging, benchmark viz, local agent UX | Planned |
+| Frameworks | PyTorch/JAX wrappers, training loop integration | Planned |
+| All‑systems support | CUDA, ROCm/HIP, Metal, OpenCL (explore Vulkan/oneAPI) | Vision |
+| All‑ops coverage | Elementwise, reductions, convs, attention, norms, fused ops | Vision |
+| Protocol Spec v1.0 | Stable spec: device negotiation, cache manifests, kernel metadata | Vision |
+
+See the `issues/` directory for detailed write‑ups:
+
+- [01 Implement runtime decorator](issues/01-implement-runtime-decorator.md)
+- [02 Hardware detection refinement](issues/02-pre-mvp-hardware-detection-refinement.md)
+- [03 Caching metadata schema](issues/03-pre-mvp-basic-caching-metadata-schema.md)
+- [04 CLI demo](issues/04-pre-mvp-cli-uhop-demo.md)
+- [05 AI kernel validation](issues/05-pre-mvp-ai-kernel-validation.md)
+- [06 Logging & benchmark viz](issues/06-pre-mvp-logging-benchmark-viz.md)
+- [07 Multi‑backend benchmarking](issues/07-mvp-multi-backend-benchmarking.md)
+
+---
+
+## Good First Issues
+
+Jump in with these approachable starters:
+
+- Improve OpenCL/kernel templates and add simple correctness tests
+- Add a CUDA/HIP example parity with the OpenCL elementwise add
+- Enhance `uhop info --json` fields (driver versions, memory footprints)
+- Add README snippets for Windows/Mac specific setup tips
+- Polish the frontend build or add a minimal dashboard card
+- Optimize CI/CD workflow and docs for PRs and promotions (badges, faster CI, templates) — see [issues/15-ci-cd-workflow-docs-promo.md](issues/15-ci-cd-workflow-docs-promo.md)
+
+Or pick one from the tracked proposals above in `issues/` and comment to claim.
+
+---
+
 ## Testing
 
-Run the test suite (GPU-dependent tests will skip if no suitable device is available):
+Run the test suite (GPU‑dependent tests skip automatically):
 
 ```bash
 pytest -q
 ```
-
+ 
 Targeted runs:
 
 ```bash
 pytest -q tests/test_matmul.py
-pytest -q -k "opencl or cuda or cpu"
+pytest -q -k "opencl or cuda or hip or metal"
 ```
 
-## Contributing
-
-Contributions are welcome! Please see `CONTRIBUTING.md` for how to propose changes and our development tips. A few quick notes:
-
-- Keep public APIs stable unless there is a compelling reason to change
-- Add or update tests when you change public behavior
-- Prefer minimal, pinned dependencies and reproducible steps
-
-## Roadmap (high level)
-
-- Multi-backend benchmarking and selection policies (CUDA/OpenCL/Torch/Triton/CPU)
-- Improved device detection and preferences (multi-GPU, vendor nuances)
-- Automated correctness and performance validation for AI-generated kernels
-- Local agent UX, security hardening, and dashboard polish
-- Framework integrations and distributed optimization
+---
 
 ## License
 
@@ -178,41 +225,4 @@ MIT © UHOP Systems
 
 ---
 
-## Architecture at a glance
-
-High level components and flow:
-
-```mermaid
-flowchart TB
-  subgraph Browser["Frontend Portal (Vite + React)"]
-    UI["UI: controls and logs"]
-  end
-
-  subgraph API["Backend API (Node/Express + ws)"]
-    REST["REST: /connect, /run-demo, /generate-kernel, /agent-status"]
-    WSS["WebSocket: /logs, /agent"]
-  end
-
-  subgraph Agent["Local Agent (Python)"]
-    WSClient["WS Client"]
-    UHOPCore1["UHOP Core: hardware detect, backends, AI codegen"]
-  end
-
-  subgraph ServerUHOP["Server Runtime (Python)"]
-    UHOPCore2["UHOP Core: hardware detect, backends, AI codegen"]
-  end
-
-  UI -->|HTTP| REST
-  UI -. logs .-> WSS
-  WSS <-->|pairing + jobs| WSClient
-  REST -->|prefer agent if connected| Agent
-  REST -->|fallback if no agent| ServerUHOP
-```
-
-- Frontend: React SPA built with Vite and Tailwind/shadcn. Deployed to GitHub Pages under `/uhop/`. Talks to the backend via REST and a logs WebSocket.
-- Backend: Node/Express server with a WebSocket endpoint for agent pairing at `/agent`. Routes compute to the Local Agent when available; otherwise executes on the server (Python UHOP).
-- Local Agent: Lightweight Python client that connects to the backend over WS, runs UHOP operations (hardware info, demos, AI codegen) on your machine, streams logs, and returns results. Token-based pairing supported.
-- UHOP Core (Python):
-  - Device detection and backend selection: Torch (CUDA/MPS/CPU), OpenCL (GPU/CPU), Triton (Linux) with CPU fallback
-  - `@uhop.optimize` decorator, caching, CLI tools, AI kernel generation/validation
-- AI Codegen: Optional OpenAI usage when `OPENAI_API_KEY` is set (on agent or server). Validation and smoke tests help gate kernels.
+Tags: gpu, compiler, rocm, cuda, opencl, metal, hpc, mlops, deep-learning, open-hardware

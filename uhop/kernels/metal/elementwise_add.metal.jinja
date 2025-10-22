@@ -1,0 +1,15 @@
+// elementwise kernel template (Metal Shading Language)
+using namespace metal;
+
+kernel void {{ KERNEL_NAME }}(
+    device const {{ DTYPE }}* a [[ buffer(0) ]],
+    device const {{ DTYPE }}* b [[ buffer(1) ]],
+    device {{ DTYPE }}* out [[ buffer(2) ]],
+    constant uint &N [[ buffer(3) ]],
+    uint tid [[ thread_position_in_grid ]],
+    uint grid_size [[ threads_per_grid ]])
+{
+    for (uint i = tid; i < N; i += grid_size) {
+        out[i] = {{ OP_EXPR }};
+    }
+}
