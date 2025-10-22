@@ -124,10 +124,17 @@ def autotune_elementwise(op_name: str, size: int, dtype: str = "float32", device
     for block in candidates:
         threads = block
         grid = math.ceil(size / threads)
+        # Map dtype token to backend language type
+        if device in ("cuda", "hip"):
+            dtype_token = _cuda_dtype(dtype)
+        elif device == "opencl":
+            dtype_token = "float" if "float" in dtype else "int"
+        else:
+            dtype_token = "float"
         context = {
             "OP_EXPR": "a[i] + b[i]" if op_name == "add" else "a[i] * b[i]",
             "KERNEL_NAME": "elem_op",
-            "DTYPE": c_dtype,
+            "DTYPE": dtype_token,
         }
         try:
             kernel = compile_kernel_from_template(template_path, "elem_op", context)
