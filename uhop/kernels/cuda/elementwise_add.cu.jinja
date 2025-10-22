@@ -1,0 +1,12 @@
+// elementwise kernel template (CUDA)
+#include <stdint.h>
+extern "C" __global__
+void {{ KERNEL_NAME }}(const {{ DTYPE }}* __restrict__ a, const {{ DTYPE }}* __restrict__ b, {{ DTYPE }}* __restrict__ out, size_t N) {
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t stride = gridDim.x * blockDim.x;
+    for (size_t i = idx; i < N; i += stride) {
+        {{ DTYPE }} aval = a[i];
+        {{ DTYPE }} bval = b[i];
+        out[i] = {{ OP_EXPR }};
+    }
+}

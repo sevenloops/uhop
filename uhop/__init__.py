@@ -8,7 +8,14 @@ from __future__ import annotations
 
 from typing import Any
 
-__all__ = ["UHopOptimizer", "optimize", "detect_hardware", "UhopCache"]
+__all__ = [
+  "UHopOptimizer",
+  "optimize",
+  "detect_hardware",
+  "UhopCache",
+  "ops_registry",
+  "autotuner",
+]
 
 
 def __getattr__(name: str) -> Any:  # lazy attribute loader
@@ -24,4 +31,12 @@ def __getattr__(name: str) -> Any:  # lazy attribute loader
     from .cache import UhopCache
 
     return UhopCache
+  if name == "ops_registry":
+    from . import ops_registry as _ops_registry  # type: ignore
+
+    return _ops_registry
+  if name == "autotuner":
+    from . import autotuner as _autotuner  # type: ignore
+
+    return _autotuner
   raise AttributeError(f"module 'uhop' has no attribute {name!r}")
