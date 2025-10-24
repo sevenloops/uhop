@@ -25,5 +25,5 @@ repos:
     hooks:
       - id: prettier
         additional_dependencies: ["prettier@3.3.3"]
-        files: ^uhop-kernel-forge-main/|
+        files: ^frontend/|
                \.(md|json|yml|yaml|css|html|ts|tsx)$

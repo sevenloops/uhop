@@ -67,14 +67,14 @@ jobs:
     if: false
     defaults:
       run:
-        working-directory: uhop-kernel-forge-main
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: uhop-kernel-forge-main/package.json
+          cache-dependency-path: frontend/package.json
       - name: Install deps
         run: npm ci
       - name: Lint (ESLint)

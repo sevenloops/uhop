@@ -1,15 +1,20 @@
-# Dockerfile (minimal)
+# Dockerfile for UHOP CLI/Development
 FROM python:3.11-slim
 
 WORKDIR /app
+
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    wget \
-    clinfo \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy project files
 COPY . /app
-RUN pip install --upgrade pip
-RUN pip install numpy openai
 
-CMD ["python", "examples/demo.py"]
+# Install Python package
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir .
+
+# Default command runs CLI help
+CMD ["uhop", "--help"]
