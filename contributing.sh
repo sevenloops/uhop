@@ -21,11 +21,11 @@ set -euo pipefail
 # Env:
 #   PYTHON       Python executable (default: python3)
 #   VENV_DIR     Virtualenv dir (default: .venv)
-#   FRONTEND_DIR Docs/demo site directory (default: uhop-kernel-forge-main)
+#   FRONTEND_DIR Docs/demo site directory (default: frontend)
 
 PY=${PYTHON:-python3}
 VENV_DIR=${VENV_DIR:-.venv}
-FRONTEND_DIR=${FRONTEND_DIR:-uhop-kernel-forge-main}
+FRONTEND_DIR=${FRONTEND_DIR:-frontend}
 
 info() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
 err() { echo -e "\033[1;31m[ERROR]\033[0m $*" >&2; }
