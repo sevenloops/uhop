@@ -28,7 +28,7 @@ jobs:
       - name: Build (GitHub Pages base)
         run: VITE_GH_PAGES=1 npm run build
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: frontend/dist
   deploy:
