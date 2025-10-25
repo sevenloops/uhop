@@ -153,6 +153,17 @@ class UHopOptimizer:
 
             @wraps(fn)
             def wrapper(*args, **kwargs):
+                # Quick override for tests/dev: force calling the Python
+                # baseline implementation and skip backend selection.
+                if os.environ.get("UHOP_FORCE_BASELINE", "0") not in (
+                    "0",
+                    "false",
+                    "False",
+                    "",
+                    None,
+                ):
+                    return fn(*args, **kwargs)
+
                 if len(args) < 1:
                     raise ValueError("need at least one positional arg")
                 a = args[0]
