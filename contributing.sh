@@ -54,14 +54,14 @@ cmd_setup() {
 
 cmd_test() {
   ensure_venv
-  info "Running pytest (fast)"
-  pytest -q
+  info "Running pytest (fast) (forcing NumPy baseline)"
+  UHOP_FORCE_BASELINE=1 pytest -q
 }
 
 cmd_test_all() {
   ensure_venv
-  info "Running pytest (full)"
-  pytest -q
+  info "Running pytest (full) (forcing NumPy baseline)"
+  UHOP_FORCE_BASELINE=1 pytest -q
 }
 
 cmd_lint() {
