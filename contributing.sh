@@ -54,14 +54,16 @@ cmd_setup() {
 
 cmd_test() {
   ensure_venv
-  info "Running pytest (fast)"
-  pytest -q
+  info "Running pytest (fast) (forcing NumPy baseline)"
+  # Force baseline (numpy) implementation during tests to avoid flaky
+  # results from cached/generated backends in dev environments.
+  UHOP_FORCE_BASELINE=1 pytest -q
 }
 
 cmd_test_all() {
   ensure_venv
-  info "Running pytest (full)"
-  pytest -q
+  info "Running pytest (full) (forcing NumPy baseline)"
+  UHOP_FORCE_BASELINE=1 pytest -q
 }
 
 cmd_lint() {
