@@ -4,7 +4,7 @@
 
 Live demo: [uhop.dev](https://uhop.dev)
 
-UHOP is an open hardware optimization platform that unifies GPU acceleration across CUDA, ROCm/HIP, Metal, OpenCL, and future architectures. It detects your machine, dispatches to the best backend, can generate kernels with AI, validates them, and caches the fastest path for reuse — so developers can write simple code and run fast everywhere. 
+UHOP is an open hardware optimization platform that unifies GPU acceleration across CUDA, ROCm/HIP, Metal, OpenCL, and future architectures. It detects your machine, dispatches to the best backend, can generate kernels with AI, validates them, and caches the fastest path for reuse — so developers can write simple code and run fast everywhere.
 
 Key capabilities today:
 
@@ -80,7 +80,7 @@ uhop demo-conv2d-relu --ocl-device 0
 Try OpenCL elementwise add vs naive
 
 ```bash
-python examples/compare_elementwise_add_opencl_vs_naive.py --size 2000000
+python examples/opencl/compare_elementwise_add_opencl_vs_naive.py --size 2000000
 ```
 
 Integrate in your code
@@ -99,6 +99,43 @@ Environment knobs
 
 - `UHOP_OPENCL_DEVICE_INDEX=<idx>` — default OpenCL device override
 - `UHOP_STRICT_VALIDATE=1` — tighten AI‑kernel validation during codegen
+- `UHOP_BACKEND_PREFERENCE=opencl,torch,triton,cpu,numpy` — override optimizer backend order (comma‑separated). Examples: `opencl,torch` to force OpenCL first; `torch,cpu` to prefer Torch; `numpy` to force baseline.
+- `UHOP_OPENCL_MATMUL_IMPL=tiled|clblast` — prefer tiled GEMM (default) or request CLBlast (if installed; falls back with a warning).
+- `UHOP_OPENCL_CONV_IMPL=auto|tiled|im2col_gemm` — choose Conv2D implementation. `auto` (default) uses a device+shape heuristic to prefer im2col+GEMM on larger shapes (requires CLBlast); `tiled` forces tiled; `im2col_gemm` forces im2col.
+- `UHOP_OPENCL_VEC_CANDIDATES="1,4"` — optional compile-time vectorization candidates passed as `-D VEC=<w>` when building OpenCL kernels (current kernels default to `VEC=1`; future variants may use this to enable `float4` paths).
+
+---
+
+## Backend maturity
+
+- Most optimized backend today: OpenCL (GPU) — broad op coverage with tuned/tiled kernels and a growing autotuning surface.
+- In progress: CUDA (via Torch and AI CUDA), Apple MPS, and ROCm/HIP backends — parity work and optimizations are active.
+- Coming later: CPU-optimized paths beyond Torch CPU, and Vulkan/other GPU APIs. Contributions are welcome to accelerate these paths.
+
+---
+
+## CLBlast integration (optional)
+
+UHOP can use CLBlast for GEMM when available, enabling a BLAS-backed matmul and an im2col+GEMM path for Conv2D on OpenCL devices.
+
+- Requirements: CLBlast shared library installed on your system (DLL/SO/Dylib)
+        - Windows: clblast.dll (MSYS2/conda or vendor package)
+        - Linux: libclblast.so (APT/Yum/Pacman or conda-forge)
+        - macOS: libclblast.dylib (Homebrew/conda-forge)
+- Discovery: We auto-detect via system library paths. You can set `CLBLAST_LIBRARY` to an absolute path if needed.
+- Controls:
+        - `UHOP_OPENCL_MATMUL_IMPL=clblast` — use CLBlast GEMM for matmul
+        - `UHOP_OPENCL_CONV_IMPL=im2col_gemm` — use im2col+GEMM for Conv2D (per-batch im2col OpenCL kernel + CLBlast GEMM)
+
+Notes:
+
+- If CLBlast is not found, UHOP falls back to tiled kernels with a one-line warning.
+- On Windows, some CLBlast builds and OpenCL driver stacks have calling‑convention mismatches or event‑handling quirks when called via ctypes. UHOP now:
+        - Loads the DLL with WinDLL (stdcall) on Windows and CDLL elsewhere
+        - Passes an explicit cl_event* out‑parameter (non‑NULL) to avoid NULL‑dereference bugs
+        - Uses exact c_size_t/c_float/c_void_p arg types and row‑major leading dimensions (lda=k, ldb=n, ldc=n)
+        If you still see an access‑violation in CLBlastSgemm, set `UHOP_OPENCL_CONV_IMPL=tiled` (default) and/or `UHOP_OPENCL_MATMUL_IMPL=tiled` to continue with stable tiled kernels.
+- For best results, ensure your OpenCL ICD/runtime is installed and the CLBlast library matches your platform and driver stack. If multiple ICDs are present, try switching GPU vendors (AMD vs Intel) or updating drivers.
 
 ---
 

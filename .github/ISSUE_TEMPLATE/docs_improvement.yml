@@ -1,0 +1,14 @@
+name: Docs improvement
+description: Improve documentation or examples
+labels: [documentation]
+body:
+  - type: textarea
+    id: area
+    attributes:
+      label: Area of docs
+      description: README, website Docs page, examples, API docs, etc.
+  - type: textarea
+    id: details
+    attributes:
+      label: Details / suggested edits
+      render: text

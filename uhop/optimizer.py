@@ -227,6 +227,66 @@ class UHopOptimizer:
                     except Exception:
                         pass
 
+                # 0.5) Environment override order
+                # Example: UHOP_BACKEND_PREFERENCE="opencl,torch,triton,cpu,numpy"
+                pref = os.environ.get("UHOP_BACKEND_PREFERENCE")
+                if pref:
+                    order = [p.strip().lower() for p in pref.split(',') if p.strip()]
+
+                    def _try_backend(name: str):
+                        try:
+                            if name in ("torch", "cpu") and is_torch_available():
+                                if op_name == "matmul":
+                                    return torch_matmul(a, b)
+                                if op_name == "conv2d":
+                                    return torch_conv2d(
+                                        a,
+                                        b,
+                                        stride=kwargs.get("stride", 1),
+                                        padding=kwargs.get("padding", 0),
+                                    )
+                                if op_name == "relu":
+                                    return torch_relu(a)
+                            if name == "triton" and is_triton_available():
+                                if op_name == "matmul":
+                                    return triton_matmul(a, b)
+                                if op_name == "relu":
+                                    return triton_relu(a)
+                            if name == "opencl" and is_opencl_available():
+                                if op_name == "matmul":
+                                    return opencl_matmul(a, b)
+                                if op_name == "conv2d":
+                                    return opencl_conv2d(
+                                        a,
+                                        b,
+                                        stride=kwargs.get("stride", 1),
+                                        padding=kwargs.get("padding", 0),
+                                    )
+                                if op_name == "relu":
+                                    return opencl_relu(a)
+                            if name in ("numpy", "baseline"):
+                                # Force baseline
+                                return fn(*args, **kwargs)
+                        except Exception:
+                            return None
+                        return None
+
+                    for name in order:
+                        res = _try_backend(name)
+                        if res is not None:
+                            # cache the chosen backend if it's a recognized one
+                            chosen = name
+                            if chosen in ("baseline", "numpy"):
+                                chosen = "numpy"
+                            self.cache.set(
+                                cache_key,
+                                {
+                                    "backend": chosen,
+                                    "hardware": self.hw.__dict__,
+                                },
+                            )
+                            return res
+
                 # 1) Torch accelerator preferred on macOS (MPS)
                 try:
                     if (

@@ -100,6 +100,7 @@ def main(strict_validate: bool):
 def info(as_json: bool, ocl_device: int | None):
     """Display detected hardware and backend availability."""
     import json as _json
+    from .cache import UhopAutotune as _UhopAutotune
 
     if ocl_device is not None:
         try:
@@ -136,6 +137,31 @@ def info(as_json: bool, ocl_device: int | None):
                 torch_pref = None
         except Exception:
             mps_avail = None
+        # Collect OpenCL CLBlast unstable device flags from autotune cache
+        unstable_devices = []
+        try:
+            at = _UhopAutotune()
+            p = Path(at.file)
+            if p.exists():
+                data = _json.loads(p.read_text())
+                for k, v in data.items():
+                    if not isinstance(v, dict):
+                        continue
+                    parts = k.split("|")
+                    if len(parts) != 5:
+                        continue
+                    backend, op, kernel, device_name, shape_key = parts
+                    if (
+                        backend == "opencl"
+                        and op == "clblast"
+                        and kernel == "sgemm"
+                        and shape_key == "device"
+                        and bool(v.get("unstable"))
+                    ):
+                        unstable_devices.append(device_name)
+        except Exception:
+            unstable_devices = []
+
         console.print(_json.dumps({
             "vendor": hw.vendor,
             "kind": hw.kind,
@@ -146,6 +172,7 @@ def info(as_json: bool, ocl_device: int | None):
             "torch_preferred_device": torch_pref,
             "triton_available": is_triton_available(),
             "opencl_available": is_opencl_available(),
+            "opencl_clblast_unstable_devices": unstable_devices,
         }, indent=2))
         return
     console.print(hw_str)
@@ -198,6 +225,30 @@ def info(as_json: bool, ocl_device: int | None):
     console.print("\n[bold]OpenCL[/bold]")
     try:
         import pyopencl as cl  # type: ignore
+        # Preload autotune unstable flags once
+        _unstable_map: dict[str, bool] = {}
+        try:
+            at = _UhopAutotune()
+            p = Path(at.file)
+            if p.exists():
+                data = _json.loads(p.read_text())
+                for k, v in data.items():
+                    if not isinstance(v, dict):
+                        continue
+                    parts = k.split("|")
+                    if len(parts) != 5:
+                        continue
+                    backend, op, kernel, device_name, shape_key = parts
+                    if (
+                        backend == "opencl"
+                        and op == "clblast"
+                        and kernel == "sgemm"
+                        and shape_key == "device"
+                        and bool(v.get("unstable"))
+                    ):
+                        _unstable_map[device_name] = True
+        except Exception:
+            _unstable_map = {}
 
         def _dtype(dev_type: int) -> str:
             # Prefer the most informative type label
@@ -252,6 +303,14 @@ def info(as_json: bool, ocl_device: int | None):
                     console.print(f"        {info2}")
                     console.print(f"        {info3}")
                     console.print(f"        {info4}")
+                    # If this device has been flagged unstable for CLBlast, surface it
+                    try:
+                        if _unstable_map.get(d.name):
+                            console.print(
+                                "        CLBlast: [yellow]unstable[/yellow] — auto will skip CLBlast on this device"
+                            )
+                    except Exception:
+                        pass
                 except Exception as e:
                     console.print(
                         f"      * [{di}] (error reading device info: {e})"
@@ -1131,10 +1190,6 @@ def optimize_func(function_path):
     console.print("[bold green]Optimization complete![/bold green]")
 
 
-if __name__ == "__main__":
-    main()
-
-
 # Cache management commands
 @main.group()
 def cache():
@@ -1289,3 +1344,86 @@ def cache_invalidate(
     console.print(
         f"[green]Invalidation complete.[/green] removed={total_removed}"
     )
+
+
+@cache.group()
+def autotune():
+    """Manage autotune metadata (e.g., OpenCL local sizes, device flags)."""
+    pass
+
+
+@autotune.command("clear-clblast-unstable")
+@click.argument("device_filter", required=False, default="")
+@click.option(
+    "--exact",
+    is_flag=True,
+    help="Match device name exactly (case-insensitive). Default: substring match.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Show what would change without writing.",
+)
+def autotune_clear_clblast_unstable(device_filter: str, exact: bool, dry_run: bool):
+    """Clear the CLBlast 'unstable' flag set for a device in autotune cache.
+
+    Examples:
+      uhop cache autotune clear-clblast-unstable               # all devices
+      uhop cache autotune clear-clblast-unstable gfx           # substring match
+      uhop cache autotune clear-clblast-unstable "Radeon" --exact
+    """
+    try:
+        from .cache import UhopAutotune as _UhopAutotune
+    except Exception as e:
+        console.print(f"[red]Failed to import autotune cache:[/red] {e}")
+        return
+    # Direct file access to preserve other entries as-is
+    at = _UhopAutotune()
+    path = Path(at.file)
+    if not path.exists():
+        console.print("(no autotune cache found)")
+        return
+    try:
+        data = _json.loads(path.read_text())
+    except Exception as e:
+        console.print(f"[red]Failed to read autotune.json:[/red] {e}")
+        return
+    changed = 0
+    filt = (device_filter or "").lower()
+    for k, v in list(data.items()):
+        # Key format: backend|op|kernel_name|device|shape_key
+        try:
+            parts = k.split("|")
+            if len(parts) != 5:
+                continue
+            backend, op, kernel, device_name, shape_key = parts
+            if not (backend == "opencl" and op == "clblast" and kernel == "sgemm" and shape_key == "device"):
+                continue
+            dn = (device_name or "").lower()
+            if filt:
+                match = (dn == filt) if exact else (filt in dn)
+                if not match:
+                    continue
+            # Clear the unstable flag
+            if isinstance(v, dict) and "unstable" in v:
+                if not dry_run:
+                    v.pop("unstable", None)
+                    data[k] = v
+                changed += 1
+        except Exception:
+            continue
+    if changed == 0:
+        console.print("(no matching CLBlast unstable entries found)")
+    else:
+        if dry_run:
+            console.print(f"[yellow]Dry-run:[/yellow] would clear {changed} entr(y/ies).")
+        else:
+            try:
+                path.write_text(_json.dumps(data, indent=2))
+                console.print(f"[green]Cleared CLBlast 'unstable' on {changed} entr(y/ies).[/green]")
+            except Exception as e:
+                console.print(f"[red]Failed to write autotune.json:[/red] {e}")
+
+
+if __name__ == "__main__":
+    main()

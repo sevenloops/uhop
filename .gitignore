@@ -51,3 +51,10 @@ yarn-error.log*
 uhop/generated_kernels/
 uhop/cache/
 .benchmarks/
+
+# Local dependencies and toolchains
+.deps/
+vcpkg/
+*.dll
+*.so
+*.dylib

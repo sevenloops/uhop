@@ -216,6 +216,42 @@ class UhopAutotune:
         idx[k] = {"lsz": list(lsz)}
         self._write(idx)
 
+    # Generic parameter helpers for storing additional autotune metadata
+    def get_params(
+        self,
+        backend: str,
+        op: str,
+        kernel_name: str,
+        device: str,
+        shape_key: str,
+    ) -> Optional[Dict[str, Any]]:
+        idx = self._read()
+        k = self._key(backend, op, kernel_name, device, shape_key)
+        v = idx.get(k)
+        if isinstance(v, dict):
+            return v
+        return None
+
+    def set_params(
+        self,
+        backend: str,
+        op: str,
+        kernel_name: str,
+        device: str,
+        shape_key: str,
+        params: Dict[str, Any],
+    ):
+        idx = self._read()
+        k = self._key(backend, op, kernel_name, device, shape_key)
+        # merge with existing if present
+        cur = idx.get(k)
+        if isinstance(cur, dict):
+            merged = {**cur, **params}
+        else:
+            merged = {**params}
+        idx[k] = merged
+        self._write(idx)
+
 
 class KernelRegistry:
     """

@@ -43,15 +43,13 @@ Create a virtualenv and install dev dependencies:
 ```
 
 ## Pull request guidelines
- 
- Consider installing pre-commit hooks locally:
+
+Consider installing pre-commit hooks locally (runs ruff, black, isort, flake8, prettier):
 
 ```bash
 pip install pre-commit
 pre-commit install
- This will run black, isort, flake8, and prettier on changed files before each commit.
-This will run black, isort, flake8, and prettier on changed files before each commit.
-
+```
 
 - Keep PRs focused and small where possible.
 - Write clear titles (prefer Conventional Commit style, e.g., `feat: ...`, `fix: ...`, `docs: ...`, `test: ...`).
@@ -67,12 +65,11 @@ This will run black, isort, flake8, and prettier on changed files before each co
 
 ## CI & reviews
 
-- All PRs run:
-  - Python tests (`pytest`)
-  - Frontend build (Vite)
-- PR template will prompt for summary, changes, and checklist.
-- CODEOWNERS requires `@sevenloops` to review changes to core paths.
-- PR titles are checked for Conventional Commit prefixes; fix-up is easy if you forget — just edit the title.
+- All PRs run (GitHub Actions):
+  - Python lint (ruff) and unit tests (pytest)
+  - Frontend lint (eslint) and build (Vite)
+- PR template prompts for summary, checks, and validation steps.
+- PR titles should follow Conventional Commits; you can edit the title if needed.
 
 ## Security & secrets
 

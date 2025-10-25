@@ -1,0 +1,38 @@
+name: Bug report
+description: Report a reproducible problem
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug! Please fill out as much as you can.
+  - type: input
+    id: version
+    attributes:
+      label: UHOP version
+      description: Output of `python -c "import uhop, sys; print(uhop.__version__)"` if available.
+      placeholder: e.g. 0.1.0
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Python, GPU/driver, OpenCL platform/device (attach `python -m uhop.cli info --json` if possible)
+      render: text
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Minimal code/config to reproduce the problem
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs/traceback
+      description: Paste error output or attach files as needed
+      render: text

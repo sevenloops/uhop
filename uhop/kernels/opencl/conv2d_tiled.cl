@@ -4,8 +4,17 @@
 // Global: (outW, outH, N*K). Local: (TILE_W, TILE_H, 1)
 // Assumes small kernels (e.g., 3x3, 5x5). Uses dynamic local memory passed as kernel args.
 
+#ifndef TILE_H
 #define TILE_H 8
+#endif
+#ifndef TILE_W
 #define TILE_W 8
+#endif
+
+// Optional vector width hint for future vectorized loads/stores
+#ifndef VEC
+#define VEC 1
+#endif
 
 __kernel void conv2d_tiled(
     __global const float* input,   // [B,C,H,W]

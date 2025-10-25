@@ -13,6 +13,10 @@ const Docs = () => {
     { id: "core-concepts", title: "Core Concepts", icon: Code },
     { id: "cli-usage", title: "CLI Usage", icon: Cog },
     { id: "developer-guide", title: "Developer Guide", icon: FileText },
+    { id: "opencl-clblast", title: "OpenCL & CLBlast", icon: Zap },
+    { id: "autotune-tuning", title: "Autotune & Tuning", icon: Cog },
+    { id: "troubleshooting", title: "Troubleshooting", icon: FileText },
+    { id: "resources", title: "Resources", icon: Book },
     { id: "api-reference", title: "API Reference", icon: Zap },
   ];
 
@@ -42,6 +46,24 @@ const Docs = () => {
 
           {/* Main Content */}
           <main className="flex-1 max-w-4xl">
+            {/* Mobile nav (chips) */}
+            <div className="lg:hidden sticky top-16 z-10 -mt-4 mb-6 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+              <div className="flex gap-2 overflow-x-auto px-1 py-3">
+                {sections.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setActiveSection(s.id)}
+                    className={`shrink-0 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                      activeSection === s.id
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted text-foreground hover:bg-muted/80 border-border"
+                    }`}
+                  >
+                    {s.title}
+                  </button>
+                ))}
+              </div>
+            </div>
             {activeSection === "introduction" && (
               <div className="space-y-6 animate-fade-in">
                 <div>
@@ -271,6 +293,30 @@ uhop cache invalidate --all`}
                 </Card>
 
                 <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">Autotune & CLBlast Flags</h2>
+                  <p className="text-muted-foreground mb-3">
+                    UHOP persists simple autotune metadata and device flags (e.g., marking CLBlast as unstable on a device) in
+                    <code className="font-mono"> ~/.uhop_mvp_cache/autotune.json</code>.
+                  </p>
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">Inspect CLBlast unstable devices in <code className="font-mono">uhop info --json</code> output:</p>
+                    <CodeBlock
+                      code={`uhop info --json | jq '.opencl_clblast_unstable_devices'`}
+                      language="bash"
+                    />
+                    <p className="text-sm text-muted-foreground">Clear the CLBlast unstable flag (all devices, or filter by device substring):</p>
+                    <CodeBlock
+                      code={`# Clear all CLBlast unstable flags
+uhop cache autotune clear-clblast-unstable
+
+# Filter by device name substring (case-insensitive)
+uhop cache autotune clear-clblast-unstable gfx
+
+# Exact match and dry-run preview
+uhop cache autotune clear-clblast-unstable "Radeon RX 6800" --exact --dry-run`}
+                      language="bash"
+                    />
+                  </div>
                 </Card>
               </div>
             )}
@@ -319,6 +365,37 @@ uhop ai-generate-fused --target opencl`}
                 </Card>
 
                 <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">OpenCL + CLBlast (Optional)</h2>
+                  <p className="text-muted-foreground mb-4">
+                    UHOP can use <a className="underline" href="https://github.com/CNugteren/CLBlast" target="_blank" rel="noreferrer noopener">CLBlast</a> for GEMM to power matmul and the im2col+GEMM Conv2D path.
+                  </p>
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">Environment knobs:</p>
+                    <CodeBlock
+                      code={`# Point UHOP to your CLBlast shared library (DLL/SO/Dylib)
+export CLBLAST_LIBRARY=/abs/path/to/clblast.dll
+
+# Prefer CLBlast for matmul
+export UHOP_OPENCL_MATMUL_IMPL=clblast
+
+# Prefer im2col+GEMM for Conv2D (requires CLBlast)
+export UHOP_OPENCL_CONV_IMPL=im2col_gemm
+
+# Optional compile-time vectorization hints for OpenCL kernels
+export UHOP_OPENCL_VEC_CANDIDATES="1,4"`}
+                      language="bash"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Troubleshooting (Windows): UHOP uses a robust ctypes wrapper (WinDLL and a non-NULL cl_event*). If you still see an access violation in
+                      <code className="font-mono"> CLBlastSgemm</code>, keep working with the stable tiled kernels by setting
+                      <code className="font-mono"> UHOP_OPENCL_CONV_IMPL=tiled</code> and/or
+                      <code className="font-mono"> UHOP_OPENCL_MATMUL_IMPL=tiled</code>, and consider updating your OpenCL drivers or trying a different CLBlast build.
+                      See the repository docs for full details.
+                    </p>
+                  </div>
+                </Card>
+
+                <Card className="p-6 bg-card/50">
                   <h2 className="text-2xl font-semibold mb-4">Torch MPS Convenience</h2>
                   <p className="text-muted-foreground mb-4">Explicitly use Apple MPS via the MPS facade:</p>
                   <CodeBlock
@@ -332,6 +409,177 @@ if is_mps_available():
 `}
                     language="python"
                   />
+                </Card>
+              </div>
+            )}
+
+            {activeSection === "opencl-clblast" && (
+              <div className="space-y-6 animate-fade-in">
+                <div>
+                  <h1 className="text-4xl font-bold mb-4">OpenCL & CLBlast</h1>
+                  <p className="text-lg text-muted-foreground">Detailed configuration and behavior</p>
+                </div>
+
+                <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">How UHOP uses CLBlast</h2>
+                  <ul className="space-y-2 text-muted-foreground ml-6">
+                    <li>• Matmul: If <code className="font-mono">UHOP_OPENCL_MATMUL_IMPL=clblast</code>, UHOP will dispatch GEMM to CLBlast SGEMM.</li>
+                    <li>• Conv2D: If <code className="font-mono">UHOP_OPENCL_CONV_IMPL=im2col_gemm</code> (or in <em>auto</em> mode and heuristic selects GEMM), UHOP runs an OpenCL <code>im2col</code> kernel and multiplies via CLBlast.</li>
+                    <li>• Heuristic: <em>auto</em> prefers tiled for small shapes, prefers im2col+GEMM for large kernels/output, and always falls back if CLBlast is unavailable or unstable.</li>
+                  </ul>
+                </Card>
+
+                <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">Configuration</h2>
+                  <CodeBlock
+                    code={`# Required when CLBlast is not in the default search path
+export CLBLAST_LIBRARY=/abs/path/to/clblast.(dll|so|dylib)
+
+# Force implementations
+export UHOP_OPENCL_MATMUL_IMPL=(tiled|clblast)
+export UHOP_OPENCL_CONV_IMPL=(auto|tiled|im2col_gemm)
+
+# Vectorization candidates for OpenCL kernels (compile-time defines)
+export UHOP_OPENCL_VEC_CANDIDATES="1,2,4,8"`}
+                    language="bash"
+                  />
+                  <p className="text-muted-foreground mt-3">Note: vectorization factors &gt;1 require matching alignment and kernel support; UHOP explores candidates conservatively.</p>
+                </Card>
+
+                <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">Unstable Device Flag</h2>
+                  <p className="text-muted-foreground mb-3">
+                    If CLBlast raises a runtime error (e.g., access violation on some Windows setups), UHOP records a per-device
+                    <em>unstable</em> flag to avoid repeated attempts in <em>auto</em> mode.
+                  </p>
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">Where it’s stored:</p>
+                    <CodeBlock
+                      code={`~/.uhop_mvp_cache/autotune.json
+# key format: opencl|clblast|sgemm|<device_name>|device
+{"unstable": true}`}
+                      language="json"
+                    />
+                    <p className="text-sm text-muted-foreground">How to view from CLI:</p>
+                    <CodeBlock code={`uhop info --json | jq '.opencl_clblast_unstable_devices'`} language="bash" />
+                    <p className="text-sm text-muted-foreground">How to clear (allow re-test):</p>
+                    <CodeBlock code={`uhop cache autotune clear-clblast-unstable
+uhop cache autotune clear-clblast-unstable gfx  # substring filter
+uhop cache autotune clear-clblast-unstable "Radeon" --exact`} language="bash" />
+                  </div>
+                </Card>
+
+                <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">Windows Notes</h2>
+                  <ul className="space-y-2 text-muted-foreground ml-6">
+                    <li>• UHOP uses <code className="font-mono">WinDLL</code> and a non-NULL <code className="font-mono">cl_event*</code> in the ctypes binding.</li>
+                    <li>• If you still encounter access violations, prefer the tiled implementations and consider trying different CLBlast builds or updating your OpenCL driver.</li>
+                    <li>• The unstable flag ensures <em>auto</em> skips CLBlast to avoid repeated fallback overhead; you can clear it to re-test.</li>
+                  </ul>
+                </Card>
+              </div>
+            )}
+
+            {activeSection === "autotune-tuning" && (
+              <div className="space-y-6 animate-fade-in">
+                <div>
+                  <h1 className="text-4xl font-bold mb-4">Autotune & Tuning</h1>
+                  <p className="text-lg text-muted-foreground">How tuning works and how to inspect it</p>
+                </div>
+
+                <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">What UHOP Tunes</h2>
+                  <ul className="space-y-2 text-muted-foreground ml-6">
+                    <li>• Matmul tiled: local sizes (tile), compile-time defines <code className="font-mono">TILE</code> and <code className="font-mono">VEC</code>.</li>
+                    <li>• Conv2D tiled: <code className="font-mono">TILE_W</code>, <code className="font-mono">TILE_H</code>, and optional <code className="font-mono">VEC</code>.</li>
+                    <li>• Fused Conv2D+ReLU: best local size from a small candidate set.</li>
+                  </ul>
+                </Card>
+
+                <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">Persistence Format</h2>
+                  <p className="text-muted-foreground mb-3">Stored in <code className="font-mono">~/.uhop_mvp_cache/autotune.json</code> with shape-keyed entries:</p>
+                  <CodeBlock
+                    code={`# Example keys
+opencl|matmul|matmul_tiled|<device>|M<M>_K<K>_N<N>
+opencl|conv2d|conv2d_tiled|<device>|N<N>_C<C>_H<H>_W<W>_Co<Co>_KH<KH>_KW<KW>_S<S>_P<P>
+
+# Values include tuned local sizes and compile-time parameters
+{"lsz": [16, 16], "tile": 16, "vec": 1}`}
+                    language="json"
+                  />
+                </Card>
+
+                <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">Tips</h2>
+                  <ul className="space-y-2 text-muted-foreground ml-6">
+                    <li>• To explore vectorization, set <code className="font-mono">UHOP_OPENCL_VEC_CANDIDATES</code> (e.g., <code className="font-mono">"1,4"</code>).</li>
+                    <li>• Autotune runs quickly by timing a small candidate set; persisted choices avoid re-tuning.</li>
+                    <li>• You can remove tuned entries with <code className="font-mono">uhop cache invalidate</code> or by editing <code className="font-mono">autotune.json</code>.</li>
+                  </ul>
+                </Card>
+              </div>
+            )}
+
+            {activeSection === "troubleshooting" && (
+              <div className="space-y-6 animate-fade-in">
+                <div>
+                  <h1 className="text-4xl font-bold mb-4">Troubleshooting</h1>
+                  <p className="text-lg text-muted-foreground">Common issues and fixes</p>
+                </div>
+
+                <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">OpenCL / CLBlast</h2>
+                  <ul className="space-y-2 text-muted-foreground ml-6">
+                    <li>• Library not found: set <code className="font-mono">CLBLAST_LIBRARY</code> to the absolute path of the shared library.</li>
+                    <li>• Access violation on Windows: stick to tiled implementations and clear the unstable flag if you want to re-test later.</li>
+                    <li>• Wrong device: use <code className="font-mono">UHOP_OPENCL_DEVICE_INDEX</code> or CLI options that accept <code className="font-mono">--ocl-device</code>.</li>
+                  </ul>
+                </Card>
+
+                <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">Validation</h2>
+                  <ul className="space-y-2 text-muted-foreground ml-6">
+                    <li>• Use <code className="font-mono">--strict-validate</code> to tighten tolerances when adopting new kernels.</li>
+                    <li>• For reproducibility, keep shapes/dtypes consistent between reference and candidate functions.</li>
+                  </ul>
+                </Card>
+              </div>
+            )}
+
+            {activeSection === "resources" && (
+              <div className="space-y-6 animate-fade-in">
+                <div>
+                  <h1 className="text-4xl font-bold mb-4">Resources</h1>
+                  <p className="text-lg text-muted-foreground">Further reading, articles, and links</p>
+                </div>
+
+                <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">Articles</h2>
+                  <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+                    <li>
+                      Introducing UHOP — An Open Hardware Optimization Platform for GPU Compute &nbsp;
+                      <a
+                        href="https://medium.com/@danbis664/introducing-uhop-an-open-hardware-optimization-platform-for-gpu-compute-072420544812?postPublishedType=initial"
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="underline"
+                      >
+                        Read on Medium
+                      </a>
+                    </li>
+                  </ul>
+                </Card>
+
+                <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">Repositories & Docs</h2>
+                  <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+                    <li>
+                      CLBlast project: &nbsp;
+                      <a href="https://github.com/CNugteren/CLBlast" target="_blank" rel="noreferrer noopener" className="underline">github.com/CNugteren/CLBlast</a>
+                    </li>
+                    <li>Check the repo docs for build notes and platform-specific guidance (e.g., Windows drivers, DLL search path).</li>
+                  </ul>
                 </Card>
               </div>
             )}

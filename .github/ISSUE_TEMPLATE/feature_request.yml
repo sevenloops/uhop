@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest an idea to improve UHOP
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem does your feature solve?
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the change, API, or UX
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: Affects Python backend/runtime
+        - label: Affects OpenCL kernels/backends
+        - label: Affects CLI or docs site
+        - label: Breaking change

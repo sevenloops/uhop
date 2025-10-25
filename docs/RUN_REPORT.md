@@ -37,7 +37,7 @@ This document captures the issues we hit, how we fixed them, and the concrete ou
 - Problem: OpenCL context selection was interactive or not GPU-first.
 - Fixes:
   - Explicitly select a GPU device programmatically (first GPU found) before fallback.
-  - `examples/show_devices.py` added to display platforms/devices.
+  - `examples/devtools/show_devices.py` added to display platforms/devices.
 
 7) OpenCL kernel overhead and warnings
 - Warnings: `RepeatedKernelRetrieval` due to repeated kernel lookups.
@@ -124,7 +124,7 @@ All runs used venv Python unless otherwise noted.
 
 ### 1) UHOP vs naive Python (matmul)
 
-- Command: `PYTHONPATH=. .venv/Scripts/python.exe examples/compare_python_naive_vs_uhop.py`
+- Command: `PYTHONPATH=. .venv/Scripts/python.exe examples/benchmarks/compare_python_naive_vs_uhop.py`
 - Output:
   - UHOP (optimized over naive): ~0.001 s median
   - Naive Python baseline: ~10.877 s median
@@ -133,7 +133,7 @@ All runs used venv Python unless otherwise noted.
 
 ### 2) UHOP vs baseline (Conv2D parity)
 
-- Command: `PYTHONPATH=. python examples/compare_uhop_vs_baseline.py` (ran earlier with system python; same result with venv)
+- Command: `PYTHONPATH=. python examples/benchmarks/compare_uhop_vs_baseline.py` (ran earlier with system python; same result with venv)
 - Outputs (two runs during iteration):
   - Before forward update: Baseline loss=1.270956, median ~0.0015 s; UHOP loss=1.270956, median ~0.0028 s
   - After forward uses torch.conv2d: Baseline loss=1.270956, median ~0.0015 s; UHOP loss=1.270956, median ~0.0023 s
@@ -142,7 +142,7 @@ All runs used venv Python unless otherwise noted.
 
 ### 3) Training demos (10 steps)
 
-- UHOP training (`examples/train_cnn_uhop.py`) losses:
+- UHOP training (`examples/training/train_cnn_uhop.py`) losses:
   - 28.425049, 28.576725, 26.715187, 27.565796, 27.236261,
     27.131676, 26.492235, 27.956526, 28.125742, 25.770393
 - Baseline training (`examples/train_cnn_baseline.py`) losses:
