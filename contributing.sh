@@ -25,7 +25,7 @@ set -euo pipefail
 
 PY=${PYTHON:-python3}
 VENV_DIR=${VENV_DIR:-.venv}
-FRONTEND_DIR=${FRONTEND_DIR:-uhop-kernel-forge-main}
+FRONTEND_DIR=${FRONTEND_DIR:-frontend}
 
 info() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
 err() { echo -e "\033[1;31m[ERROR]\033[0m $*" >&2; }
@@ -54,14 +54,16 @@ cmd_setup() {
 
 cmd_test() {
   ensure_venv
-  info "Running pytest (fast)"
-  pytest -q
+  info "Running pytest (fast) (forcing NumPy baseline)"
+  # Force baseline (numpy) implementation during tests to avoid flaky
+  # results from cached/generated backends in dev environments.
+  UHOP_FORCE_BASELINE=1 pytest -q
 }
 
 cmd_test_all() {
   ensure_venv
-  info "Running pytest (full)"
-  pytest -q
+  info "Running pytest (full) (forcing NumPy baseline)"
+  UHOP_FORCE_BASELINE=1 pytest -q
 }
 
 cmd_lint() {
