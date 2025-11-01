@@ -10,7 +10,7 @@ authors = [
     { name = "UHOP Systems", email = "danbis664@gmail.com" }
 ]
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.26.0",
@@ -34,7 +34,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.3.3", "pytest-benchmark>=4.0.0", "pytest-cov>=5.0.0", "ipython>=8.27.0", "jupyter>=1.1.1"]
+dev = [
+    "pytest>=8.3.3",
+    "pytest-benchmark>=4.0.0",
+    "pytest-cov>=5.0.0",
+    "ipython>=8.27.0",
+    "jupyter>=1.1.1",
+    # developer tooling
+    "ruff>=0.6.9",
+    "black>=24.8.0",
+    "isort>=5.13.2",
+    "flake8>=7.1.0",
+    "pre-commit>=3.8.0",
+]
 amd = ["rocm-py>=6.0.1"]
 nvidia = ["cupy-cuda12x>=13.0.0"]
 
@@ -46,3 +58,60 @@ Source = "https://github.com/sevenloops/uhop"
 [project.scripts]
 uhop = "uhop.cli:main"
 uhop-agent = "uhop.agent:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+# Only package the Python library under `uhop` and its subpackages
+include = ["uhop", "uhop.*"]
+exclude = [
+    "tests",
+    "tests.*",
+    "frontend",
+    "frontend.*",
+    "backend",
+    "backend.*",
+    "docs",
+    "docs.*",
+    "examples",
+    "examples.*",
+    "issues",
+    "issues.*",
+]
+
+[tool.setuptools.package-data]
+# Ship kernel sources/templates so they can be used at runtime (OpenCL/CUDA/HIP/Metal)
+uhop = [
+    "kernels/**/*.cl",
+    "kernels/**/*.cu",
+    "kernels/**/*.cuh",
+    "kernels/**/*.hip",
+    "kernels/**/*.metal",
+    "kernels/**/*.jinja",
+    "kernels/**/*.h",
+    "kernels/**/*.hpp",
+    "kernels/**/*.c",
+    "kernels/**/*.cpp",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = [
+    ".venv",
+    "frontend",
+    "backend",
+    "docs",
+    "examples",
+    "issues",
+    "uhop/generated_kernels",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501", "E731"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501", "E731"]
+"uhop/benchmarks/*" = ["E501", "E731"]

@@ -12,14 +12,18 @@ const Demo = () => {
   const [fusedOut, setFusedOut] = useState("");
   const [aiGenOut, setAiGenOut] = useState("");
   const [bridgeUrl, setBridgeUrl] = useState("http://127.0.0.1:5823");
-  const [bridgeStatus, setBridgeStatus] = useState<"unknown"|"checking"|"ok"|"down">("unknown");
+  const [bridgeStatus, setBridgeStatus] = useState<
+    "unknown" | "checking" | "ok" | "down"
+  >("unknown");
   const [bridgeMsg, setBridgeMsg] = useState<string>("");
 
   // Online API base (set VITE_UHOP_API_BASE at build time)
-  const envAny = (import.meta as unknown as { env?: Record<string, string> });
+  const envAny = import.meta as unknown as { env?: Record<string, string> };
   const defaultOnline = envAny?.env?.VITE_UHOP_API_BASE || "";
   const [onlineUrl, setOnlineUrl] = useState<string>(defaultOnline);
-  const [onlineStatus, setOnlineStatus] = useState<"unknown"|"checking"|"ok"|"down">("unknown");
+  const [onlineStatus, setOnlineStatus] = useState<
+    "unknown" | "checking" | "ok" | "down"
+  >("unknown");
   const [onlineMsg, setOnlineMsg] = useState<string>("");
 
   async function pingBridge(urlOverride?: string) {
@@ -70,12 +74,16 @@ const Demo = () => {
       // Try configured online API first
       if (defaultOnline) {
         try {
-          const r0 = await fetch(`${String(defaultOnline).replace(/\/$/, "")}/health`);
+          const r0 = await fetch(
+            `${String(defaultOnline).replace(/\/$/, "")}/health`,
+          );
           if (!cancelled && r0.ok) {
             setOnlineUrl(String(defaultOnline).replace(/\/$/, ""));
             setOnlineStatus("ok");
           }
-        } catch (_e) { /* no-op */ }
+        } catch (_e) {
+          /* no-op */
+        }
       }
       // prefer 127.0.0.1
       try {
@@ -122,19 +130,25 @@ const Demo = () => {
       }
       if (!cancelled) setBridgeStatus("down");
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [defaultOnline]);
 
-  async function runCmd(cmd: string): Promise<{code:number,stdout:string,stderr:string}|null> {
+  async function runCmd(
+    cmd: string,
+  ): Promise<{ code: number; stdout: string; stderr: string } | null> {
     try {
       const r = await fetch(`${bridgeUrl}/run`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cmd })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cmd }),
       });
       if (!r.ok) {
         setBridgeStatus("down");
-        setBridgeMsg(`Bridge responded with status ${r.status}${r.status===404?" — check that the Bridge URL is not pointing to the Online API (use port 5823 or 5825).":""}`);
+        setBridgeMsg(
+          `Bridge responded with status ${r.status}${r.status === 404 ? " — check that the Bridge URL is not pointing to the Online API (use port 5823 or 5825)." : ""}`,
+        );
         return null;
       }
       return await r.json();
@@ -163,12 +177,12 @@ const Demo = () => {
     }
   }
 
-  async function runDemoOnline(size=256, iters=3): Promise<boolean> {
+  async function runDemoOnline(size = 256, iters = 3): Promise<boolean> {
     try {
       const r = await fetch(`${onlineUrl.replace(/\/$/, "")}/demo/matmul`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ size, iters })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ size, iters }),
       });
       if (!r.ok) {
         setOnlineStatus("down");
@@ -176,7 +190,7 @@ const Demo = () => {
         return false;
       }
       const data = await r.json();
-      if (typeof data?.stdout === 'string') setDemoOut(data.stdout);
+      if (typeof data?.stdout === "string") setDemoOut(data.stdout);
       return true;
     } catch (e) {
       setOnlineStatus("down");
@@ -186,9 +200,21 @@ const Demo = () => {
   }
 
   const operations = [
-    { id: "matmul", name: "Matrix Multiplication", desc: "Dense matrix-matrix product" },
-    { id: "conv2d", name: "2D Convolution", desc: "Convolutional neural network operation" },
-    { id: "relu", name: "ReLU Activation", desc: "Rectified Linear Unit activation" },
+    {
+      id: "matmul",
+      name: "Matrix Multiplication",
+      desc: "Dense matrix-matrix product",
+    },
+    {
+      id: "conv2d",
+      name: "2D Convolution",
+      desc: "Convolutional neural network operation",
+    },
+    {
+      id: "relu",
+      name: "ReLU Activation",
+      desc: "Rectified Linear Unit activation",
+    },
   ];
 
   // Parsers for pasted outputs
@@ -264,22 +290,29 @@ const Demo = () => {
               <h2 className="text-2xl font-semibold">Detect Hardware</h2>
             </div>
             <p className="text-sm text-muted-foreground mb-3">
-              Option A) Online API. Option B) Local bridge. Option C) run locally and paste output.
+              Option A) Online API. Option B) Local bridge. Option C) run
+              locally and paste output.
             </p>
             {/* Online API controls */}
             <div className="mt-2 flex gap-2 items-center flex-wrap">
               <Globe className="h-4 w-4 text-primary" />
-              <Button variant="outline" size="sm" onClick={()=>pingOnline()}>Check Online API</Button>
-              <span className={`text-xs ${onlineStatus==='ok'?'text-green-600':onlineStatus==='down'?'text-red-600':onlineStatus==='checking'?'text-amber-600':'text-muted-foreground'}`}>
+              <Button variant="outline" size="sm" onClick={() => pingOnline()}>
+                Check Online API
+              </Button>
+              <span
+                className={`text-xs ${onlineStatus === "ok" ? "text-green-600" : onlineStatus === "down" ? "text-red-600" : onlineStatus === "checking" ? "text-amber-600" : "text-muted-foreground"}`}
+              >
                 Online API: {onlineStatus}
               </span>
               <input
                 value={onlineUrl}
-                onChange={(e)=>setOnlineUrl(e.target.value)}
+                onChange={(e) => setOnlineUrl(e.target.value)}
                 className="ml-auto px-2 py-1 rounded border text-xs bg-muted/30 w-72"
                 placeholder="https://demo-api.uhop.dev"
               />
-              <Button size="sm" onClick={getInfoOnline}>Run via Online API</Button>
+              <Button size="sm" onClick={getInfoOnline}>
+                Run via Online API
+              </Button>
             </div>
             {onlineMsg && (
               <div className="mt-2 text-xs text-red-600">{onlineMsg}</div>
@@ -287,37 +320,74 @@ const Demo = () => {
             <div className="mt-4" />
             <CodeBlock code={`uhop info --json`} language="bash" />
             <div className="mt-2 flex gap-2 items-center flex-wrap">
-              <Button variant="outline" size="sm" onClick={()=>pingBridge()}>Check Bridge</Button>
-              <Button variant="ghost" size="sm" onClick={()=>pingBridge("http://127.0.0.1:5823")}>Try 127.0.0.1</Button>
-              <Button variant="ghost" size="sm" onClick={()=>pingBridge("http://127.0.0.1:5825")}>Try 127.0.0.1:5825</Button>
-              <Button variant="ghost" size="sm" onClick={()=>pingBridge("http://localhost:5823")}>Try localhost</Button>
-              <Button variant="ghost" size="sm" onClick={()=>pingBridge("http://localhost:5825")}>Try localhost:5825</Button>
-              <span className={`text-xs ${bridgeStatus==='ok'?'text-green-600':bridgeStatus==='down'?'text-red-600':bridgeStatus==='checking'?'text-amber-600':'text-muted-foreground'}`}>
+              <Button variant="outline" size="sm" onClick={() => pingBridge()}>
+                Check Bridge
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => pingBridge("http://127.0.0.1:5823")}
+              >
+                Try 127.0.0.1
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => pingBridge("http://127.0.0.1:5825")}
+              >
+                Try 127.0.0.1:5825
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => pingBridge("http://localhost:5823")}
+              >
+                Try localhost
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => pingBridge("http://localhost:5825")}
+              >
+                Try localhost:5825
+              </Button>
+              <span
+                className={`text-xs ${bridgeStatus === "ok" ? "text-green-600" : bridgeStatus === "down" ? "text-red-600" : bridgeStatus === "checking" ? "text-amber-600" : "text-muted-foreground"}`}
+              >
                 Bridge: {bridgeStatus}
               </span>
               <input
                 value={bridgeUrl}
-                onChange={(e)=>setBridgeUrl(e.target.value)}
+                onChange={(e) => setBridgeUrl(e.target.value)}
                 className="ml-auto px-2 py-1 rounded border text-xs bg-muted/30 w-64"
                 placeholder="http://127.0.0.1:5823"
               />
               <Button
                 size="sm"
-                onClick={async()=>{
-                  const resp = await runCmd('uhop info --json');
+                onClick={async () => {
+                  const resp = await runCmd("uhop info --json");
                   if (resp && resp.code === 0) setHardwareJson(resp.stdout);
                 }}
-              >Run via Bridge</Button>
+              >
+                Run via Bridge
+              </Button>
             </div>
-            {(bridgeStatus==='down' || bridgeStatus==='unknown') && (
+            {(bridgeStatus === "down" || bridgeStatus === "unknown") && (
               <div className="mt-2 text-xs text-muted-foreground space-y-2">
                 {bridgeMsg && <div className="text-red-600">{bridgeMsg}</div>}
                 <div>
-                  To enable "Run via Bridge", start the local bridge in a terminal:
+                  To enable "Run via Bridge", start the local bridge in a
+                  terminal:
                 </div>
-                <CodeBlock code={`uhop web-bridge --port 5823`} language="bash" />
+                <CodeBlock
+                  code={`uhop web-bridge --port 5823`}
+                  language="bash"
+                />
                 <div className="text-xs">or</div>
-                <CodeBlock code={`python -m uhop.web_bridge --port 5823`} language="bash" />
+                <CodeBlock
+                  code={`python -m uhop.web_bridge --port 5823`}
+                  language="bash"
+                />
               </div>
             )}
             <textarea
@@ -328,14 +398,55 @@ const Demo = () => {
             />
             {parsedHardware && (
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Card className="p-3"><div className="text-sm">Vendor: <strong>{String(parsedHardware.vendor)}</strong></div></Card>
-                <Card className="p-3"><div className="text-sm">Kind: <strong>{String(parsedHardware.kind)}</strong></div></Card>
-                <Card className="p-3"><div className="text-sm">Name: <strong>{String(parsedHardware.name)}</strong></div></Card>
-                <Card className="p-3"><div className="text-sm">Torch available: <strong>{String(parsedHardware.torch_available)}</strong></div></Card>
-                <Card className="p-3"><div className="text-sm">Torch MPS: <strong>{String(parsedHardware.torch_mps_available)}</strong></div></Card>
-                <Card className="p-3"><div className="text-sm">Torch preferred: <strong>{String(parsedHardware.torch_preferred_device)}</strong></div></Card>
-                <Card className="p-3"><div className="text-sm">OpenCL: <strong>{String(parsedHardware.opencl_available)}</strong></div></Card>
-                <Card className="p-3"><div className="text-sm">Triton: <strong>{String(parsedHardware.triton_available)}</strong></div></Card>
+                <Card className="p-3">
+                  <div className="text-sm">
+                    Vendor: <strong>{String(parsedHardware.vendor)}</strong>
+                  </div>
+                </Card>
+                <Card className="p-3">
+                  <div className="text-sm">
+                    Kind: <strong>{String(parsedHardware.kind)}</strong>
+                  </div>
+                </Card>
+                <Card className="p-3">
+                  <div className="text-sm">
+                    Name: <strong>{String(parsedHardware.name)}</strong>
+                  </div>
+                </Card>
+                <Card className="p-3">
+                  <div className="text-sm">
+                    Torch available:{" "}
+                    <strong>{String(parsedHardware.torch_available)}</strong>
+                  </div>
+                </Card>
+                <Card className="p-3">
+                  <div className="text-sm">
+                    Torch MPS:{" "}
+                    <strong>
+                      {String(parsedHardware.torch_mps_available)}
+                    </strong>
+                  </div>
+                </Card>
+                <Card className="p-3">
+                  <div className="text-sm">
+                    Torch preferred:{" "}
+                    <strong>
+                      {String(parsedHardware.torch_preferred_device)}
+                    </strong>
+                  </div>
+                </Card>
+                <Card className="p-3">
+                  <div className="text-sm">
+                    OpenCL:{" "}
+                    <strong>{String(parsedHardware.opencl_available)}</strong>
+                  </div>
+                </Card>
+                <Card className="p-3">
+                  <div className="text-sm">
+                    Triton:{" "}
+                    <strong>{String(parsedHardware.triton_available)}</strong>
+                  </div>
+                </Card>
               </div>
             )}
           </Card>
@@ -346,23 +457,35 @@ const Demo = () => {
               <Play className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-semibold">Run Demo</h2>
             </div>
-            <p className="text-sm text-muted-foreground mb-3">Option A) Online API. Option B) Local bridge. Option C) run locally and paste output.</p>
+            <p className="text-sm text-muted-foreground mb-3">
+              Option A) Online API. Option B) Local bridge. Option C) run
+              locally and paste output.
+            </p>
             <div className="mt-2 flex gap-2 items-center flex-wrap">
               <Globe className="h-4 w-4 text-primary" />
-              <Button size="sm" onClick={()=>runDemoOnline(256,3)}>Run via Online API</Button>
-              {onlineStatus!=='ok' && (
-                <span className="text-xs text-muted-foreground">(Tip: set API base and click Check Online API above)</span>
+              <Button size="sm" onClick={() => runDemoOnline(256, 3)}>
+                Run via Online API
+              </Button>
+              {onlineStatus !== "ok" && (
+                <span className="text-xs text-muted-foreground">
+                  (Tip: set API base and click Check Online API above)
+                </span>
               )}
             </div>
-            <CodeBlock code={`uhop demo --size 256 --iters 3`} language="bash" />
+            <CodeBlock
+              code={`uhop demo --size 256 --iters 3`}
+              language="bash"
+            />
             <div className="mt-2 flex gap-2">
               <Button
                 size="sm"
-                onClick={async()=>{
-                  const resp = await runCmd('uhop demo --size 256 --iters 3');
+                onClick={async () => {
+                  const resp = await runCmd("uhop demo --size 256 --iters 3");
                   if (resp && resp.code === 0) setDemoOut(resp.stdout);
                 }}
-              >Run via Bridge</Button>
+              >
+                Run via Bridge
+              </Button>
             </div>
             <textarea
               value={demoOut}
@@ -370,13 +493,22 @@ const Demo = () => {
               placeholder="Paste output from 'uhop demo'..."
               className="mt-3 w-full h-40 p-3 rounded-md border bg-muted/30 font-mono text-sm"
             />
-            {(demoTimings.uhop !== undefined || demoTimings.naive !== undefined) && (
+            {(demoTimings.uhop !== undefined ||
+              demoTimings.naive !== undefined) && (
               <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                 {demoTimings.uhop !== undefined && (
-                  <Card className="p-3"><div className="text-sm">UHOP time: <strong>{demoTimings.uhop}s</strong></div></Card>
+                  <Card className="p-3">
+                    <div className="text-sm">
+                      UHOP time: <strong>{demoTimings.uhop}s</strong>
+                    </div>
+                  </Card>
                 )}
                 {demoTimings.naive !== undefined && (
-                  <Card className="p-3"><div className="text-sm">Naive baseline: <strong>{demoTimings.naive}s</strong></div></Card>
+                  <Card className="p-3">
+                    <div className="text-sm">
+                      Naive baseline: <strong>{demoTimings.naive}s</strong>
+                    </div>
+                  </Card>
                 )}
               </div>
             )}
@@ -386,29 +518,55 @@ const Demo = () => {
           <Card className="p-6 bg-card/50 backdrop-blur-sm">
             <div className="flex items-center gap-3 mb-4">
               <Zap className="h-5 w-5 text-secondary" />
-              <h2 className="text-2xl font-semibold">AI Kernel Generation (CLI)</h2>
+              <h2 className="text-2xl font-semibold">
+                AI Kernel Generation (CLI)
+              </h2>
             </div>
-            <p className="text-sm text-muted-foreground mb-3">Generate candidates and run a quick smoke test on your hardware:</p>
+            <p className="text-sm text-muted-foreground mb-3">
+              Generate candidates and run a quick smoke test on your hardware:
+            </p>
             <div className="space-y-3">
-              <CodeBlock code={`uhop ai-generate --operation matmul --target opencl`} language="bash" />
-              <CodeBlock code={`uhop ai-generate-fused --target opencl`} language="bash" />
+              <CodeBlock
+                code={`uhop ai-generate --operation matmul --target opencl`}
+                language="bash"
+              />
+              <CodeBlock
+                code={`uhop ai-generate-fused --target opencl`}
+                language="bash"
+              />
             </div>
             <div className="mt-2 flex gap-2">
               <Button
                 size="sm"
-                onClick={async()=>{
-                  const resp = await runCmd('uhop ai-generate --operation matmul --target opencl');
-                  if (resp && resp.code === 0) setAiGenOut(resp.stdout + (resp.stderr?`\nSTDERR:\n${resp.stderr}`:''));
+                onClick={async () => {
+                  const resp = await runCmd(
+                    "uhop ai-generate --operation matmul --target opencl",
+                  );
+                  if (resp && resp.code === 0)
+                    setAiGenOut(
+                      resp.stdout +
+                        (resp.stderr ? `\nSTDERR:\n${resp.stderr}` : ""),
+                    );
                 }}
-              >Generate (matmul)</Button>
+              >
+                Generate (matmul)
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={async()=>{
-                  const resp = await runCmd('uhop ai-generate-fused --target opencl');
-                  if (resp && resp.code === 0) setAiGenOut(resp.stdout + (resp.stderr?`\nSTDERR:\n${resp.stderr}`:''));
+                onClick={async () => {
+                  const resp = await runCmd(
+                    "uhop ai-generate-fused --target opencl",
+                  );
+                  if (resp && resp.code === 0)
+                    setAiGenOut(
+                      resp.stdout +
+                        (resp.stderr ? `\nSTDERR:\n${resp.stderr}` : ""),
+                    );
                 }}
-              >Generate (fused)</Button>
+              >
+                Generate (fused)
+              </Button>
             </div>
             <textarea
               value={aiGenOut}
@@ -418,7 +576,8 @@ const Demo = () => {
             />
             {!!aiGenOut && (
               <p className="text-xs text-muted-foreground mt-3">
-                Output captured. UHOP only adopts AI-generated kernels if they pass validation; use --strict-validate for tighter tolerances.
+                Output captured. UHOP only adopts AI-generated kernels if they
+                pass validation; use --strict-validate for tighter tolerances.
               </p>
             )}
           </Card>
@@ -426,14 +585,26 @@ const Demo = () => {
           {/* Try it locally */}
           <Card className="p-6 bg-card/50 backdrop-blur-sm">
             <h2 className="text-2xl font-semibold mb-4">Try It Locally</h2>
-            <p className="text-muted-foreground mb-4">Run these commands on your machine to test UHOP with your hardware:</p>
+            <p className="text-muted-foreground mb-4">
+              Run these commands on your machine to test UHOP with your
+              hardware:
+            </p>
             <div className="space-y-3">
               <CodeBlock code={`uhop info --json`} language="bash" />
-              <CodeBlock code={`uhop demo --size 256 --iters 3`} language="bash" />
-              <CodeBlock code={`uhop demo-conv2d-relu --c-in 3 --c-out 16 --h 64 --w 64 --k 3`} language="bash" />
+              <CodeBlock
+                code={`uhop demo --size 256 --iters 3`}
+                language="bash"
+              />
+              <CodeBlock
+                code={`uhop demo-conv2d-relu --c-in 3 --c-out 16 --h 64 --w 64 --k 3`}
+                language="bash"
+              />
               <CodeBlock code={`uhop cache list`} language="bash" />
             </div>
-            <p className="text-xs text-muted-foreground mt-3">Note: The in-browser demo is a simulation for visualization; run commands locally for real performance and results.</p>
+            <p className="text-xs text-muted-foreground mt-3">
+              Note: The in-browser demo is a simulation for visualization; run
+              commands locally for real performance and results.
+            </p>
           </Card>
 
           {/* Removed chart visualization and static code preview to focus on real CLI-driven flows */}

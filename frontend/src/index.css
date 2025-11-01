@@ -48,9 +48,21 @@ All colors MUST be HSL.
     --sidebar-ring: 190 100% 50%;
 
     /* Gradients */
-    --gradient-hero: linear-gradient(135deg, hsl(262 83% 58%) 0%, hsl(190 100% 50%) 100%);
-    --gradient-subtle: linear-gradient(180deg, hsl(240 10% 3%) 0%, hsl(240 8% 6%) 100%);
-    --gradient-glow: radial-gradient(circle at 50% 0%, hsl(190 100% 50% / 0.15) 0%, transparent 50%);
+    --gradient-hero: linear-gradient(
+      135deg,
+      hsl(262 83% 58%) 0%,
+      hsl(190 100% 50%) 100%
+    );
+    --gradient-subtle: linear-gradient(
+      180deg,
+      hsl(240 10% 3%) 0%,
+      hsl(240 8% 6%) 100%
+    );
+    --gradient-glow: radial-gradient(
+      circle at 50% 0%,
+      hsl(190 100% 50% / 0.15) 0%,
+      transparent 50%
+    );
 
     /* Shadows */
     --shadow-glow: 0 0 40px hsl(190 100% 50% / 0.3);
@@ -68,18 +80,20 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
   }
 
   /* Grid background effect */
   body::before {
-    content: '';
+    content: "";
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background-image: 
+    background-image:
       linear-gradient(hsl(190 100% 50% / 0.03) 1px, transparent 1px),
       linear-gradient(90deg, hsl(190 100% 50% / 0.03) 1px, transparent 1px);
     background-size: 40px 40px;
@@ -90,13 +104,16 @@ All colors MUST be HSL.
 
 @layer base {
   /* Ensure app content paints above the background overlay */
-  #root { position: relative; z-index: 1; }
+  #root {
+    position: relative;
+    z-index: 1;
+  }
 }
 
 /* Top overlay grid to ensure visibility across sections */
 @layer base {
   body::after {
-    content: '';
+    content: "";
     position: fixed;
     inset: 0;
     pointer-events: none;

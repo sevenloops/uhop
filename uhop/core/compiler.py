@@ -6,27 +6,23 @@ We provide runtime compilation using PyCUDA (SourceModule) and a helper to call 
 If PyCUDA is available, SourceModule compiles the CUDA C source in-memory.
 """
 
-import os
+import hashlib
 import subprocess
 from pathlib import Path
-from typing import Optional, Dict
-import hashlib
+from typing import Dict, Optional
+
 
 class NVCCCompiler:
     @staticmethod
-    def compile_cu_to_ptx(source_path: str, arch: str = "sm_70", out_path: Optional[str] = None) -> str:
+    def compile_cu_to_ptx(
+        source_path: str, arch: str = "sm_70", out_path: Optional[str] = None
+    ) -> str:
         src = Path(source_path)
         out = Path(out_path) if out_path else src.with_suffix(".ptx")
-        cmd = [
-            "nvcc",
-            "-ptx",
-            f"-arch={arch}",
-            str(src),
-            "-o",
-            str(out)
-        ]
+        cmd = ["nvcc", "-ptx", f"-arch={arch}", str(src), "-o", str(out)]
         subprocess.run(cmd, check=True)
         return str(out)
+
 
 class CUDACompiler:
     _registry: Dict[str, any] = {}

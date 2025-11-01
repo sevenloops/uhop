@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def generated_conv2d_relu(a, b):
     # Get dimensions
     n, h, w, c = a.shape

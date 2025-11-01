@@ -3,10 +3,11 @@ Minimal Metal wrapper that compiles .metal source via Apple's metal/metallib too
 and uses subprocess to run a tiny host helper if available. This is a defensive
 implementation: if the macOS toolchain is not present, the wrapper raises.
 """
-from pathlib import Path
-import subprocess
+
 import shutil
+import subprocess
 import tempfile
+from pathlib import Path
 
 
 def ensure_metal_toolchain():
@@ -31,7 +32,9 @@ class MetalKernel:
         # This minimal wrapper only ensures the library compiles; runtime launching requires bindings.
 
     def launch(self, *args, **kwargs):
-        raise NotImplementedError("Runtime launch via Metal is not implemented in this minimal wrapper. Use host-side helper or extend with PyObjC bindings.")
+        raise NotImplementedError(
+            "Runtime launch via Metal is not implemented in this minimal wrapper. Use host-side helper or extend with PyObjC bindings."
+        )
 
 
 def time_kernel_run(*args, **kwargs):

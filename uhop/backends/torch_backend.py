@@ -74,10 +74,7 @@ def torch_conv2d(input_np, weight_np, stride=1, padding=0):
     w = _to_torch(weight_np).to(dev)
     out = F.conv2d(inp, w, stride=stride, padding=padding)
     # return torch tensor if inputs were torch; otherwise numpy
-    if (
-        isinstance(input_np, torch.Tensor)
-        or isinstance(weight_np, torch.Tensor)
-    ):
+    if isinstance(input_np, torch.Tensor) or isinstance(weight_np, torch.Tensor):
         return out
     return out.cpu().numpy()
 

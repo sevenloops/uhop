@@ -5,12 +5,14 @@ Thin wrappers over torch to explicitly target Apple's Metal Performance
 Shaders (MPS) device when available. These helpers are optional convenience
 facades; the main torch backend already prefers CUDA > MPS > CPU.
 """
+
 from __future__ import annotations
 
 from typing import Any
 
 try:
     import torch  # type: ignore
+
     _TORCH_OK = True
 except Exception:  # pragma: no cover - torch not available in minimal envs
     torch = None
@@ -22,8 +24,7 @@ def is_mps_available() -> bool:
         return False
     try:  # pragma: no cover - depends on host
         return bool(
-            getattr(torch.backends, "mps", None)
-            and torch.backends.mps.is_available()
+            getattr(torch.backends, "mps", None) and torch.backends.mps.is_available()
         )
     except Exception:
         return False

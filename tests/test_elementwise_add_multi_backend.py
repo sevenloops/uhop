@@ -1,5 +1,6 @@
-import shutil
 import importlib.util
+import shutil
+
 import pytest
 
 
@@ -28,7 +29,9 @@ def test_elementwise_add_autotune_multi_backend(backend):
         pytest.skip("Apple metal/metallib not available; skipping Metal compile test")
 
     try:
-        result = autotune_elementwise("add", size=1 << 16, dtype="float32", device=backend)
+        result = autotune_elementwise(
+            "add", size=1 << 16, dtype="float32", device=backend
+        )
     except RuntimeError as e:
         # If HIP requires cupy-rocm and isn't present, skip gracefully
         if backend == "hip":

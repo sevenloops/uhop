@@ -7,16 +7,17 @@ accepts PyOpenCL queue and buffers. If the CLBlast shared library is not found,
 `load_clblast()` returns None.
 """
 from __future__ import annotations
-import os
-import sys
+
 import ctypes
 import ctypes.util
+import os
+import sys
 from typing import Optional
 
 # CLBlast enums (subset)
 CLBLAST_LAYOUT_ROW_MAJOR = 0  # clblast::Layout::kRowMajor
-CLBLAST_TRANSPOSE_NO = 0      # clblast::Transpose::kNo
-CLBLAST_TRANSPOSE_YES = 1     # clblast::Transpose::kYes
+CLBLAST_TRANSPOSE_NO = 0  # clblast::Transpose::kNo
+CLBLAST_TRANSPOSE_YES = 1  # clblast::Transpose::kYes
 
 
 def _find_clblast_library() -> Optional[str]:
@@ -36,7 +37,7 @@ def _find_clblast_library() -> Optional[str]:
         path = ctypes.util.find_library(n) or n
         try:
             # Just attempt to load then unload to verify existence
-            lib = ctypes.CDLL(path)
+            ctypes.CDLL(path)
             return path
         except Exception:
             continue
@@ -109,14 +110,25 @@ def sgemm(
 
     func.restype = c_int
     func.argtypes = [
-        c_int, c_int, c_int,           # layout, transA, transB
-        c_size_t, c_size_t, c_size_t,  # m, n, k
-        c_float,                       # alpha
-        c_void_p, c_size_t, c_size_t,  # A, a_offset, a_ld
-        c_void_p, c_size_t, c_size_t,  # B, b_offset, b_ld
-        c_float,                       # beta
-        c_void_p, c_size_t, c_size_t,  # C, c_offset, c_ld
-        c_void_p, ctypes.POINTER(c_void_p)  # queue, event (nullable)
+        c_int,
+        c_int,
+        c_int,  # layout, transA, transB
+        c_size_t,
+        c_size_t,
+        c_size_t,  # m, n, k
+        c_float,  # alpha
+        c_void_p,
+        c_size_t,
+        c_size_t,  # A, a_offset, a_ld
+        c_void_p,
+        c_size_t,
+        c_size_t,  # B, b_offset, b_ld
+        c_float,  # beta
+        c_void_p,
+        c_size_t,
+        c_size_t,  # C, c_offset, c_ld
+        c_void_p,
+        ctypes.POINTER(c_void_p),  # queue, event (nullable)
     ]
 
     layout = CLBLAST_LAYOUT_ROW_MAJOR
@@ -132,13 +144,24 @@ def sgemm(
     out_event = c_void_p(0)
 
     status = func(
-        c_int(layout), c_int(transA), c_int(transB),
-        c_size_t(M), c_size_t(N), c_size_t(K),
+        c_int(layout),
+        c_int(transA),
+        c_int(transB),
+        c_size_t(M),
+        c_size_t(N),
+        c_size_t(K),
         c_float(alpha),
-        c_void_p(int(a_buf_int_ptr)), c_size_t(0), c_size_t(a_ld),
-        c_void_p(int(b_buf_int_ptr)), c_size_t(0), c_size_t(b_ld),
+        c_void_p(int(a_buf_int_ptr)),
+        c_size_t(0),
+        c_size_t(a_ld),
+        c_void_p(int(b_buf_int_ptr)),
+        c_size_t(0),
+        c_size_t(b_ld),
         c_float(beta),
-        c_void_p(int(c_buf_int_ptr)), c_size_t(0), c_size_t(c_ld),
-        c_void_p(int(queue_int_ptr)), ctypes.byref(out_event)
+        c_void_p(int(c_buf_int_ptr)),
+        c_size_t(0),
+        c_size_t(c_ld),
+        c_void_p(int(queue_int_ptr)),
+        ctypes.byref(out_event),
     )
     return int(status)

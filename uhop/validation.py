@@ -21,22 +21,15 @@ The candidate/reference callables are invoked as fn(*inputs, **kwargs) and
 should return an array-like (NumPy or torch). When strict=True, both abs and
 relative tolerances are tightened by 10x as a safety gate.
 """
-from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Sequence,
-    Tuple,
-)
+from __future__ import annotations
 
 import os
 import time
+from dataclasses import dataclass
+from typing import (Any, Callable, Dict, Iterable, List, Optional, Sequence,
+                    Tuple)
+
 import numpy as np
 
 
@@ -184,15 +177,11 @@ def validate_callable(
         ref_np = _to_numpy(ref)
         cand_np = _to_numpy(cand)
         if ref_np.shape != cand_np.shape:
-            msg = (
-                f"shape mismatch: {ref_np.shape} vs {cand_np.shape}"
-            )
+            msg = f"shape mismatch: {ref_np.shape} vs {cand_np.shape}"
             return ValidationResult(False, worst_abs, worst_rel, i, msg)
         abs_err = np.max(np.abs(ref_np - cand_np)) if ref_np.size else 0.0
         denom = np.maximum(np.abs(ref_np), 1e-12)
-        rel_err = (
-            np.max(np.abs((ref_np - cand_np) / denom)) if ref_np.size else 0.0
-        )
+        rel_err = np.max(np.abs((ref_np - cand_np) / denom)) if ref_np.size else 0.0
         worst_abs = max(worst_abs, float(abs_err))
         worst_rel = max(worst_rel, float(rel_err))
         if not (abs_err <= atol or rel_err <= rtol):
@@ -314,9 +303,7 @@ def _dump_case(
 ):
     os.makedirs(dump_dir, exist_ok=True)
     marker = int(time.time() * 1000)
-    fname = (
-        f"case_{marker}_{suffix}.npz" if suffix else f"case_{marker}.npz"
-    )
+    fname = f"case_{marker}_{suffix}.npz" if suffix else f"case_{marker}.npz"
     path = os.path.join(dump_dir, fname)
     save_kwargs = {f"in_{i}": v for i, v in enumerate(inputs)}
     if out_c is not None:

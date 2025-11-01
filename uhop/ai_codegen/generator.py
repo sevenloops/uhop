@@ -6,9 +6,9 @@ Consolidated AI Codegen provider.
 - Supports generating CUDA/OpenCL/Triton/Python kernels depending on requested target.
 - Saves generated code into uhop/generated_kernels/
 """
+import ast
 import os
 import re
-import ast
 from pathlib import Path
 from typing import Optional
 
@@ -17,6 +17,7 @@ deepseek_provider = None  # DeepSeek integration removed
 try:
     # Prefer OpenAI v1 SDK usage
     from openai import OpenAI as _OpenAIClient  # type: ignore
+
     _OPENAI_V1 = True
 except Exception:
     _OpenAIClient = None
@@ -29,14 +30,20 @@ except Exception:
 GENERATED_DIR = Path(__file__).resolve().parent.parent / "generated_kernels"
 GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
+
 def _extract_code_blocks(text: str):
-    blocks = re.findall(r"```(?:opencl|cuda|c\+\+|c|cpp|python|)\n(.*?)```", text, flags=re.DOTALL | re.IGNORECASE)
+    blocks = re.findall(
+        r"```(?:opencl|cuda|c\+\+|c|cpp|python|)\n(.*?)```",
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
     if blocks:
         return [b.strip() for b in blocks if b.strip()]
     # fallback heuristics
-    if 'extern "C"' in text or 'kernel' in text:
+    if 'extern "C"' in text or "kernel" in text:
         return [text.strip()]
     return []
+
 
 def _verify_syntax_python(code: str) -> bool:
     try:
@@ -44,6 +51,7 @@ def _verify_syntax_python(code: str) -> bool:
         return True
     except SyntaxError:
         return False
+
 
 class AICodegen:
     def __init__(self, model: str = os.environ.get("UHOP_OPENAI_MODEL", "gpt-4o-mini")):
@@ -60,9 +68,16 @@ class AICodegen:
         self.last_error: Optional[str] = None  # populated if a provider call fails
 
     def _debug(self) -> bool:
-        return os.environ.get("UHOP_AI_DEBUG", "0").lower() in ("1", "true", "yes", "on")
+        return os.environ.get("UHOP_AI_DEBUG", "0").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
 
-    def _call_openai(self, prompt: str, max_tokens: int = 1200, temperature: float = 0.0):
+    def _call_openai(
+        self, prompt: str, max_tokens: int = 1200, temperature: float = 0.0
+    ):
         # Requires OPENAI_API_KEY; supports both legacy and v1 SDKs.
         if "OPENAI_API_KEY" not in os.environ:
             self.last_error = "OPENAI_API_KEY not set in environment"
@@ -73,7 +88,10 @@ class AICodegen:
                 resp = client.chat.completions.create(
                     model=self.model,
                     messages=[
-                        {"role": "system", "content": "You are an assistant that outputs runnable kernels (CUDA C, OpenCL C, Triton, or Python)."},
+                        {
+                            "role": "system",
+                            "content": "You are an assistant that outputs runnable kernels (CUDA C, OpenCL C, Triton, or Python).",
+                        },
                         {"role": "user", "content": prompt},
                     ],
                     max_tokens=max_tokens,
@@ -81,11 +99,14 @@ class AICodegen:
                 )
                 return resp.choices[0].message.content
             # Legacy fallback (openai<1.0 style) retained just in case
-            if 'openai' in globals() and openai is not None:
+            if "openai" in globals() and openai is not None:
                 resp = openai.ChatCompletion.create(
                     model=self.model,
                     messages=[
-                        {"role": "system", "content": "You are an assistant that outputs runnable kernels (CUDA C, OpenCL C, Triton, or Python)."},
+                        {
+                            "role": "system",
+                            "content": "You are an assistant that outputs runnable kernels (CUDA C, OpenCL C, Triton, or Python).",
+                        },
                         {"role": "user", "content": prompt},
                     ],
                     max_tokens=max_tokens,
@@ -98,13 +119,22 @@ class AICodegen:
             self.last_error = f"OpenAI request failed: {type(e).__name__}: {e}"
             if self._debug():
                 import traceback
+
                 traceback.print_exc()
         return None
 
     def _call_deepseek(self, prompt: str):
         return None
 
-    def generate(self, operation_name: str, target: Optional[str] = None, prompt_extra: Optional[str] = None, *, temperature: float = 0.0, suffix: Optional[str] = None) -> Path:
+    def generate(
+        self,
+        operation_name: str,
+        target: Optional[str] = None,
+        prompt_extra: Optional[str] = None,
+        *,
+        temperature: float = 0.0,
+        suffix: Optional[str] = None,
+    ) -> Path:
         """
         Generate a kernel for operation_name.
         target: "cuda", "opencl", "python", "triton" (advisory; generator prefers CUDA).
@@ -114,6 +144,7 @@ class AICodegen:
         if target is None:
             try:
                 from ..hardware import detect_hardware
+
                 hw = detect_hardware()
                 if hw.kind.startswith("opencl") or hw.vendor in ("amd", "intel"):
                     target = "opencl"
@@ -175,7 +206,7 @@ class AICodegen:
         # Try OpenAI first
         self.last_prompt = prompt
         text = self._call_openai(prompt, temperature=temperature)
-        provider = "openai"
+        # provider fixed to OpenAI for now; variable removed to satisfy linter
 
         if not text:
             # Surface more helpful diagnostics
@@ -194,7 +225,11 @@ class AICodegen:
         code = max(blocks, key=len).strip()
 
         # Determine extension
-        ext = ".cu" if target in (None, "cuda") else ".cl" if target == "opencl" else ".py" if target == "python" else ".py"
+        ext = (
+            ".cu"
+            if target in (None, "cuda")
+            else ".cl" if target == "opencl" else ".py" if target == "python" else ".py"
+        )
         suffix = suffix or ""
         filename = GENERATED_DIR / f"ai_{operation_name}{suffix}{ext}"
         # If python target, verify syntax

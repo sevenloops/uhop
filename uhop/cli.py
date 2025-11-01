@@ -1,33 +1,34 @@
-import time
 import os
+import time
 from pathlib import Path
+
 import click
 import numpy as np
 from rich.console import Console
 
+from .backends import (is_opencl_available, is_torch_available,
+                       is_triton_available)
 from .hardware import detect_hardware
-from .backends import (
-    is_torch_available,
-    is_triton_available,
-    is_opencl_available,
-)
 
 # Conditional imports for OpenCL functions
 try:
     if is_opencl_available():
-        from .backends.opencl_backend import set_opencl_device as _set_opencl_device
-        from .backends.opencl_backend import opencl_conv2d_relu as _ocl_conv2d_relu
+        from .backends.opencl_backend import \
+            opencl_conv2d_relu as _ocl_conv2d_relu
+        from .backends.opencl_backend import \
+            set_opencl_device as _set_opencl_device
     else:
         _set_opencl_device = None
         _ocl_conv2d_relu = None
 except ImportError:
     _set_opencl_device = None
     _ocl_conv2d_relu = None
+import json as _json
+from datetime import datetime as _dt
+
 from . import optimize
 from .ai_codegen import AICodegen
 from .cache import UhopCache as _UhopCache
-from datetime import datetime as _dt
-import json as _json
 
 console = Console()
 
@@ -88,9 +89,7 @@ def main(strict_validate: bool):
 
 
 @main.command()
-@click.option(
-    "--json", "as_json", is_flag=True, help="Emit machine-readable JSON."
-)
+@click.option("--json", "as_json", is_flag=True, help="Emit machine-readable JSON.")
 @click.option(
     "--ocl-device",
     type=int,
@@ -100,6 +99,7 @@ def main(strict_validate: bool):
 def info(as_json: bool, ocl_device: int | None):
     """Display detected hardware and backend availability."""
     import json as _json
+
     from .cache import UhopAutotune as _UhopAutotune
 
     if ocl_device is not None:
@@ -116,23 +116,23 @@ def info(as_json: bool, ocl_device: int | None):
     hw_str = _hardware_summary()
     if as_json:
         from .hardware import detect_hardware
+
         hw = detect_hardware()
         mps_avail = None
         torch_pref = None
         try:
             import torch  # type: ignore
+
             mps_avail = bool(
-                getattr(torch.backends, 'mps', None)
+                getattr(torch.backends, "mps", None)
                 and torch.backends.mps.is_available()
             )
             try:
-                from .backends.torch_backend import (
-                    _torch_device_preference as _pref,
-                )
+                from .backends.torch_backend import \
+                    _torch_device_preference as _pref
+
                 dev = _pref()
-                torch_pref = (
-                    getattr(dev, 'type', None) if dev is not None else None
-                )
+                torch_pref = getattr(dev, "type", None) if dev is not None else None
             except Exception:
                 torch_pref = None
         except Exception:
@@ -162,18 +162,23 @@ def info(as_json: bool, ocl_device: int | None):
         except Exception:
             unstable_devices = []
 
-        console.print(_json.dumps({
-            "vendor": hw.vendor,
-            "kind": hw.kind,
-            "name": hw.name,
-            "details": hw.details,
-            "torch_available": is_torch_available(),
-            "torch_mps_available": mps_avail,
-            "torch_preferred_device": torch_pref,
-            "triton_available": is_triton_available(),
-            "opencl_available": is_opencl_available(),
-            "opencl_clblast_unstable_devices": unstable_devices,
-        }, indent=2))
+        console.print(
+            _json.dumps(
+                {
+                    "vendor": hw.vendor,
+                    "kind": hw.kind,
+                    "name": hw.name,
+                    "details": hw.details,
+                    "torch_available": is_torch_available(),
+                    "torch_mps_available": mps_avail,
+                    "torch_preferred_device": torch_pref,
+                    "triton_available": is_triton_available(),
+                    "opencl_available": is_opencl_available(),
+                    "opencl_clblast_unstable_devices": unstable_devices,
+                },
+                indent=2,
+            )
+        )
         return
     console.print(hw_str)
 
@@ -181,15 +186,14 @@ def info(as_json: bool, ocl_device: int | None):
     console.print("\n[bold]Torch[/bold]")
     try:
         import torch  # type: ignore
-        console.print(
-            f"- torch version: {getattr(torch, '__version__', 'unknown')}"
-        )
-        has_cuda = hasattr(torch, 'cuda') and torch.cuda.is_available()
+
+        console.print(f"- torch version: {getattr(torch, '__version__', 'unknown')}")
+        has_cuda = hasattr(torch, "cuda") and torch.cuda.is_available()
         console.print(f"- CUDA available: {has_cuda}")
         # Apple Metal Performance Shaders (MPS)
         try:
             mps_ok = bool(
-                getattr(torch.backends, 'mps', None)
+                getattr(torch.backends, "mps", None)
                 and torch.backends.mps.is_available()
             )
         except Exception:
@@ -197,11 +201,11 @@ def info(as_json: bool, ocl_device: int | None):
         console.print(f"- MPS available: {mps_ok}")
         # UHOP's torch device preference (cuda > mps > cpu)
         try:
-            from .backends.torch_backend import (
-                _torch_device_preference as _pref,
-            )
+            from .backends.torch_backend import \
+                _torch_device_preference as _pref
+
             dev = _pref()
-            pref = getattr(dev, 'type', None) if dev is not None else None
+            pref = getattr(dev, "type", None) if dev is not None else None
             console.print(f"- UHOP preferred device: {pref}")
         except Exception:
             pass
@@ -212,9 +216,7 @@ def info(as_json: bool, ocl_device: int | None):
                 for i in range(device_count):
                     name = torch.cuda.get_device_name(i)
                     props = torch.cuda.get_device_properties(i)
-                    total_mem_gb = getattr(props, 'total_memory', 0) / (
-                        1024**3
-                    )
+                    total_mem_gb = getattr(props, "total_memory", 0) / (1024**3)
                     console.print(f"  - [{i}] {name} ({total_mem_gb:.2f} GB)")
             except Exception as e:
                 console.print(f"  (error querying CUDA devices: {e})")
@@ -225,6 +227,7 @@ def info(as_json: bool, ocl_device: int | None):
     console.print("\n[bold]OpenCL[/bold]")
     try:
         import pyopencl as cl  # type: ignore
+
         # Preload autotune unstable flags once
         _unstable_map: dict[str, bool] = {}
         try:
@@ -285,15 +288,10 @@ def info(as_json: bool, ocl_device: int | None):
             )
             for di, d in enumerate(p.get_devices()):
                 try:
-                    info1 = (
-                        f"      * [{di}] {_dtype(d.type)} | name={d.name}"
-                    )
-                    info2 = (
-                        f"vendor={d.vendor} | version={d.version}"
-                    )
+                    info1 = f"      * [{di}] {_dtype(d.type)} | name={d.name}"
+                    info2 = f"vendor={d.vendor} | version={d.version}"
                     info3 = (
-                        f"CUs={d.max_compute_units} | "
-                        f"maxWG={d.max_work_group_size}"
+                        f"CUs={d.max_compute_units} | " f"maxWG={d.max_work_group_size}"
                     )
                     info4 = (
                         f"global={_fmt_bytes(d.global_mem_size)} | "
@@ -312,9 +310,7 @@ def info(as_json: bool, ocl_device: int | None):
                     except Exception:
                         pass
                 except Exception as e:
-                    console.print(
-                        f"      * [{di}] (error reading device info: {e})"
-                    )
+                    console.print(f"      * [{di}] (error reading device info: {e})")
     except Exception as e:
         console.print(f"- pyopencl not importable or no platforms: {e}")
 
@@ -457,6 +453,7 @@ def demo_conv2d_relu(
     console.print(_hardware_summary())
 
     import numpy as np
+
     rng = np.random.default_rng(0)
     x = rng.random((n, c_in, h, w), dtype=np.float32)
     wgt = rng.random((c_out, c_in, k, k), dtype=np.float32)
@@ -474,19 +471,17 @@ def demo_conv2d_relu(
     if _ocl_conv2d_relu is None:
         console.print("[red]Error:[/red] OpenCL Conv2D+ReLU not available")
         return
-    
+
     _ = _ocl_conv2d_relu(x, wgt, stride=stride, padding=padding)
-    t_uhop = _med(
-        lambda: _ocl_conv2d_relu(x, wgt, stride=stride, padding=padding)
-    )
+    t_uhop = _med(lambda: _ocl_conv2d_relu(x, wgt, stride=stride, padding=padding))
 
     # Baseline 1: naive CPU loops (may be slow, do single iteration)
     def _conv2d_relu_naive(inp, wt):
         N, C, H, W = inp.shape
         Cout, Cin, KH, KW = wt.shape
         assert C == Cin
-        outH = (H + 2*padding - KH) // stride + 1
-        outW = (W + 2*padding - KW) // stride + 1
+        outH = (H + 2 * padding - KH) // stride + 1
+        outW = (W + 2 * padding - KW) // stride + 1
         out = np.zeros((N, Cout, outH, outW), dtype=np.float32)
         for n_i in range(N):
             for co in range(Cout):
@@ -496,13 +491,10 @@ def demo_conv2d_relu(
                         for ci in range(Cin):
                             for ky in range(KH):
                                 for kx in range(KW):
-                                    iy = y_o*stride - padding + ky
-                                    ix = x_o*stride - padding + kx
+                                    iy = y_o * stride - padding + ky
+                                    ix = x_o * stride - padding + kx
                                     if 0 <= iy < H and 0 <= ix < W:
-                                        s += (
-                                            inp[n_i, ci, iy, ix]
-                                            * wt[co, ci, ky, kx]
-                                        )
+                                        s += inp[n_i, ci, iy, ix] * wt[co, ci, ky, kx]
                         out[n_i, co, y_o, x_o] = s if s > 0.0 else 0.0
         return out
 
@@ -513,6 +505,7 @@ def demo_conv2d_relu(
     try:
         import torch
         import torch.nn.functional as F
+
         xt = torch.from_numpy(x)
         wt = torch.from_numpy(wgt)
 
@@ -554,9 +547,7 @@ def demo_conv2d_relu(
 @click.option(
     "--validate",
     is_flag=True,
-    help=(
-        "Validate generated code (python: import; opencl: build)."
-    ),
+    help=("Validate generated code (python: import; opencl: build)."),
 )
 @click.option(
     "--smoke",
@@ -574,17 +565,13 @@ def demo_conv2d_relu(
     default=1,
     show_default=True,
     type=int,
-    help=(
-        "If >1, gen multiple and bench (OpenCL matmul only)."
-    ),
+    help=("If >1, gen multiple and bench (OpenCL matmul only)."),
 )
 @click.option(
     "--model",
     default=None,
     show_default=False,
-    help=(
-        "Override OpenAI model (else uses env/default)."
-    ),
+    help=("Override OpenAI model (else uses env/default)."),
 )
 def ai_generate(
     operation: str,
@@ -609,9 +596,7 @@ def ai_generate(
     gen = AICodegen(model=model) if model else AICodegen()
     if samples <= 1:
         try:
-            path = gen.generate(
-                operation, target=target, temperature=temperature
-            )
+            path = gen.generate(operation, target=target, temperature=temperature)
             console.print(f"Saved generated code to: [bold]{path}[/bold]")
         except Exception as e:
             console.print(f"[red]Generation failed:[/red] {e}")
@@ -643,6 +628,7 @@ def ai_generate(
         # Syntax validation already performed in generator; ensure importable
         try:
             import importlib.util
+
             spec = importlib.util.spec_from_file_location(
                 "uhop.generated_kernels.ai_generated", str(path)
             )
@@ -656,6 +642,7 @@ def ai_generate(
         # Try to compile OpenCL source to catch obvious errors
         try:
             import pyopencl as cl
+
             ctx, q = _ensure_opencl_context_for_validation()
             built = []
             for pth in paths:
@@ -669,6 +656,7 @@ def ai_generate(
 
     if smoke:
         import numpy as np
+
         if operation.lower() == "matmul":
             A = np.random.RandomState(0).rand(32, 16).astype(np.float32)
             B = np.random.RandomState(1).rand(16, 24).astype(np.float32)
@@ -676,6 +664,7 @@ def ai_generate(
             if target.lower() == "python":
                 try:
                     import importlib.util
+
                     spec = importlib.util.spec_from_file_location(
                         "uhop.generated_kernels.ai_generated",
                         str(path),
@@ -691,8 +680,10 @@ def ai_generate(
                     console.print(f"[red]Smoke test failed:[/red] {e}")
             elif target.lower() == "opencl":
                 try:
-                    import pyopencl as cl
                     from time import perf_counter
+
+                    import pyopencl as cl
+
                     ctx, q = _ensure_opencl_context_for_validation()
                     results = []
                     for pth in paths:
@@ -712,8 +703,12 @@ def ai_generate(
                         c_buf = cl.Buffer(ctx, mf.WRITE_ONLY, C.nbytes)
                         kn = cl.Kernel(prg, f"generated_{operation}")
                         kn.set_args(
-                            np.int32(M), np.int32(N), np.int32(K),
-                            a_buf, b_buf, c_buf,
+                            np.int32(M),
+                            np.int32(N),
+                            np.int32(K),
+                            a_buf,
+                            b_buf,
+                            c_buf,
                         )
                         gsz = (int(M), int(N))
                         # warm
@@ -728,8 +723,7 @@ def ai_generate(
                         dt = float(perf_counter() - t0)
                         results.append((pth, err, dt))
                         msg = (
-                            f"Candidate {pth.name}: Linf={err:.3e}, "
-                            f"time={dt:.6f}s"
+                            f"Candidate {pth.name}: Linf={err:.3e}, " f"time={dt:.6f}s"
                         )
                         console.print(msg)
                     # Pick best by time with acceptable error
@@ -767,6 +761,7 @@ def ai_generate(
                     try:
                         cache = _UhopCache()
                         from .hardware import detect_hardware as _detect
+
                         cache.set(
                             "matmul",
                             {
@@ -788,8 +783,10 @@ def ai_generate(
                     console.print(f"[red]OpenCL smoke test failed:[/red] {e}")
         elif operation.lower() == "relu" and target.lower() == "opencl":
             try:
-                import pyopencl as cl
                 from time import perf_counter
+
+                import pyopencl as cl
+
                 ctx, q = _ensure_opencl_context_for_validation()
                 X = np.random.RandomState(0).randn(1_024).astype(np.float32)
                 ref = np.maximum(X, 0)
@@ -800,9 +797,7 @@ def ai_generate(
                     N = np.int32(X.size)
                     Y = np.empty_like(X)
                     mf = cl.mem_flags
-                    x_buf = cl.Buffer(
-                        ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=X
-                    )
+                    x_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=X)
                     y_buf = cl.Buffer(ctx, mf.WRITE_ONLY, Y.nbytes)
                     kn = cl.Kernel(prg, "generated_relu")
                     kn.set_args(N, x_buf, y_buf)
@@ -850,6 +845,7 @@ def ai_generate(
                 try:
                     cache = _UhopCache()
                     from .hardware import detect_hardware as _detect
+
                     cache.set(
                         "relu",
                         {
@@ -864,15 +860,15 @@ def ai_generate(
                         "(ai_opencl/relu).[/green]"
                     )
                 except Exception as e:
-                    console.print(
-                        "[yellow]Warn:[/yellow] cache set failed: " f"{e}"
-                    )
+                    console.print("[yellow]Warn:[/yellow] cache set failed: " f"{e}")
             except Exception as e:
                 console.print(f"[red]OpenCL ReLU smoke test failed:[/red] {e}")
         elif operation.lower() == "conv2d" and target.lower() == "opencl":
             try:
-                import pyopencl as cl
                 from time import perf_counter
+
+                import pyopencl as cl
+
                 ctx, q = _ensure_opencl_context_for_validation()
                 # Small config
                 N, C_in, H, W = 1, 3, 32, 32
@@ -880,15 +876,14 @@ def ai_generate(
                 stride, pad = 1, 1
                 rng = np.random.default_rng(0)
                 X = rng.standard_normal((N, C_in, H, W), dtype=np.float32)
-                Wt = rng.standard_normal(
-                    (C_out, C_in, KH, KW), dtype=np.float32
-                )
-                outH = (H + 2*pad - KH)//stride + 1
-                outW = (W + 2*pad - KW)//stride + 1
+                Wt = rng.standard_normal((C_out, C_in, KH, KW), dtype=np.float32)
+                outH = (H + 2 * pad - KH) // stride + 1
+                outW = (W + 2 * pad - KW) // stride + 1
                 # Reference via torch if available, else naive
                 try:
                     import torch
                     import torch.nn.functional as F
+
                     ref = F.conv2d(
                         torch.from_numpy(X),
                         torch.from_numpy(Wt),
@@ -905,8 +900,8 @@ def ai_generate(
                                     for ci in range(C_in):
                                         for ky in range(KH):
                                             for kx in range(KW):
-                                                iy = y*stride - pad + ky
-                                                ix = x*stride - pad + kx
+                                                iy = y * stride - pad + ky
+                                                ix = x * stride - pad + kx
                                                 if 0 <= iy < H and 0 <= ix < W:
                                                     s += (
                                                         X[n, ci, iy, ix]
@@ -934,13 +929,22 @@ def ai_generate(
                     # args: N,C_in,H,W,C_out,KH,KW,stride,pad,input,weight,
                     #       output,outH,outW
                     kn.set_args(
-                        np.int32(N), np.int32(C_in), np.int32(H), np.int32(W),
-                        np.int32(C_out), np.int32(KH), np.int32(KW),
-                        np.int32(stride), np.int32(pad),
-                        x_buf, w_buf, y_buf,
-                        np.int32(outH), np.int32(outW)
+                        np.int32(N),
+                        np.int32(C_in),
+                        np.int32(H),
+                        np.int32(W),
+                        np.int32(C_out),
+                        np.int32(KH),
+                        np.int32(KW),
+                        np.int32(stride),
+                        np.int32(pad),
+                        x_buf,
+                        w_buf,
+                        y_buf,
+                        np.int32(outH),
+                        np.int32(outW),
                     )
-                    gsz = (int(outW), int(outH), int(N*C_out))
+                    gsz = (int(outW), int(outH), int(N * C_out))
                     # warm
                     cl.enqueue_nd_range_kernel(q, kn, gsz, None)
                     q.finish()
@@ -985,6 +989,7 @@ def ai_generate(
                 try:
                     cache = _UhopCache()
                     from .hardware import detect_hardware as _detect
+
                     cache.set(
                         "conv2d",
                         {
@@ -999,14 +1004,9 @@ def ai_generate(
                         "(ai_opencl/conv2d).[/green]"
                     )
                 except Exception as e:
-                    console.print(
-                        "[yellow]Warn:[/yellow] cache set failed: "
-                        f"{e}"
-                    )
+                    console.print("[yellow]Warn:[/yellow] cache set failed: " f"{e}")
             except Exception as e:
-                console.print(
-                    f"[red]OpenCL Conv2D smoke test failed:[/red] {e}"
-                )
+                console.print(f"[red]OpenCL Conv2D smoke test failed:[/red] {e}")
 
 
 @main.command(name="ai-generate-fused")
@@ -1017,9 +1017,7 @@ def ai_generate(
     "--model",
     default=None,
     show_default=False,
-    help=(
-        "Override OpenAI model (else uses env/default)."
-    ),
+    help=("Override OpenAI model (else uses env/default)."),
 )
 def ai_generate_fused(
     stride: int,
@@ -1034,6 +1032,7 @@ def ai_generate_fused(
     """
     console.print("[bold cyan]AI Codegen — Fused Conv2D+ReLU[/bold cyan]")
     from .ai_codegen.generator import AICodegen
+
     gen = AICodegen(model=model) if model else AICodegen()
     # Build a prompt using the fused template constants from prompt_templates
     # (already imported in generator via generator prompt strings)
@@ -1065,12 +1064,14 @@ def ai_generate_fused(
 
     # Compile and benchmark vs current backend fused path
     try:
-        import pyopencl as cl
-        import numpy as np
         from time import perf_counter
-        from .backends.opencl_backend import (
-            opencl_conv2d_relu as fused_baseline,
-        )
+
+        import numpy as np
+        import pyopencl as cl
+
+        from .backends.opencl_backend import \
+            opencl_conv2d_relu as fused_baseline
+
         ctx, q = _ensure_opencl_context_for_validation()
         src = Path(path).read_text()
         prg = cl.Program(ctx, src).build()
@@ -1081,8 +1082,8 @@ def ai_generate_fused(
         X = rng.random((N, C_in, H, W), dtype=np.float32)
         Wt = rng.random((C_out, C_in, KH, KW), dtype=np.float32)
         bias = np.zeros((C_out,), dtype=np.float32)
-        outH = (H + 2*padding - KH)//stride + 1
-        outW = (W + 2*padding - KW)//stride + 1
+        outH = (H + 2 * padding - KH) // stride + 1
+        outW = (W + 2 * padding - KW) // stride + 1
         # Reference via baseline fused path
         ref = fused_baseline(X, Wt, stride=stride, padding=padding)
         # Prepare OpenCL buffers
@@ -1095,11 +1096,21 @@ def ai_generate_fused(
         y_buf = cl.Buffer(ctx, mf.WRITE_ONLY, Y.nbytes)
         kn = cl.Kernel(prg, "conv2d_relu")
         kn.set_args(
-            in_buf, w_buf, b_buf, y_buf,
-            np.int32(C_in), np.int32(H), np.int32(W),
-            np.int32(C_out), np.int32(KH), np.int32(KW),
-            np.int32(stride), np.int32(padding), np.int32(1),
-            np.int32(outH), np.int32(outW)
+            in_buf,
+            w_buf,
+            b_buf,
+            y_buf,
+            np.int32(C_in),
+            np.int32(H),
+            np.int32(W),
+            np.int32(C_out),
+            np.int32(KH),
+            np.int32(KW),
+            np.int32(stride),
+            np.int32(padding),
+            np.int32(1),
+            np.int32(outH),
+            np.int32(outW),
         )
         gsz = (int(outW), int(outH), int(C_out))
         lsz = (8, 8, 1)
@@ -1142,6 +1153,7 @@ def ai_generate_fused(
             try:
                 cache = _UhopCache()
                 from .hardware import detect_hardware as _detect
+
                 cache.set(
                     "conv2d_relu",
                     {
@@ -1166,6 +1178,7 @@ def ai_generate_fused(
 def _ensure_opencl_context_for_validation():
     try:
         import pyopencl as cl
+
         plats = cl.get_platforms()
         for p in plats:
             devs = [d for d in p.get_devices() if d.type & cl.device_type.GPU]
@@ -1293,9 +1306,7 @@ def web_api(host: str, port: int):
     except Exception as e:
         console.print(f"[red]Failed to import web API:[/red] {e}")
         return
-    console.print(
-        f"[green]Starting web API on http://{host}:{port}[/green]"
-    )
+    console.print(f"[green]Starting web API on http://{host}:{port}[/green]")
     _run(host, port)
 
 
@@ -1341,9 +1352,7 @@ def cache_invalidate(
         total_removed += c.invalidate_device(device_query)
     if backend_name:
         total_removed += c.invalidate_backend(backend_name)
-    console.print(
-        f"[green]Invalidation complete.[/green] removed={total_removed}"
-    )
+    console.print(f"[green]Invalidation complete.[/green] removed={total_removed}")
 
 
 @cache.group()
@@ -1397,7 +1406,12 @@ def autotune_clear_clblast_unstable(device_filter: str, exact: bool, dry_run: bo
             if len(parts) != 5:
                 continue
             backend, op, kernel, device_name, shape_key = parts
-            if not (backend == "opencl" and op == "clblast" and kernel == "sgemm" and shape_key == "device"):
+            if not (
+                backend == "opencl"
+                and op == "clblast"
+                and kernel == "sgemm"
+                and shape_key == "device"
+            ):
                 continue
             dn = (device_name or "").lower()
             if filt:
@@ -1416,11 +1430,15 @@ def autotune_clear_clblast_unstable(device_filter: str, exact: bool, dry_run: bo
         console.print("(no matching CLBlast unstable entries found)")
     else:
         if dry_run:
-            console.print(f"[yellow]Dry-run:[/yellow] would clear {changed} entr(y/ies).")
+            console.print(
+                f"[yellow]Dry-run:[/yellow] would clear {changed} entr(y/ies)."
+            )
         else:
             try:
                 path.write_text(_json.dumps(data, indent=2))
-                console.print(f"[green]Cleared CLBlast 'unstable' on {changed} entr(y/ies).[/green]")
+                console.print(
+                    f"[green]Cleared CLBlast 'unstable' on {changed} entr(y/ies).[/green]"
+                )
             except Exception as e:
                 console.print(f"[red]Failed to write autotune.json:[/red] {e}")
 

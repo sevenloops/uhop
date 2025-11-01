@@ -1,19 +1,19 @@
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
-import Navbar from './components/Navbar';
-import Footer from './components/Footer';
-import Home from './pages/Home';
-import Docs from './pages/Docs';
-import About from './pages/About';
-import NotFound from './pages/NotFound';
-import Portal from './pages/Portal';
-import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
+import Navbar from "./components/Navbar";
+import Footer from "./components/Footer";
+import Home from "./pages/Home";
+import Docs from "./pages/Docs";
+import About from "./pages/About";
+import NotFound from "./pages/NotFound";
+import Portal from "./pages/Portal";
+import { useEffect } from "react";
 
 function SessionRedirect() {
   const navigate = useNavigate();
   useEffect(() => {
-    const r = sessionStorage.getItem('redirect');
+    const r = sessionStorage.getItem("redirect");
     if (r) {
-      sessionStorage.removeItem('redirect');
+      sessionStorage.removeItem("redirect");
       navigate(r, { replace: true });
     }
   }, [navigate]);

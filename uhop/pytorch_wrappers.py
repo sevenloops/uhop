@@ -12,8 +12,7 @@ UHOPConv2DFunction.backward:
 """
 import torch
 from torch.autograd import Function
-import numpy as np
-from .optimizer import _GLOBAL_OPT
+
 
 class UHOPConv2DFunction(Function):
     @staticmethod
@@ -21,12 +20,14 @@ class UHOPConv2DFunction(Function):
         # Fast path: use torch conv2d directly (no autograd graph is recorded here).
         try:
             import torch.nn.functional as F
+
             out_t = F.conv2d(input_t, weight_t, stride=stride, padding=padding)
         except Exception:
             # Fallback: very slow naive NumPy conv
             inp_np = input_t.detach().cpu().numpy()
             w_np = weight_t.detach().cpu().numpy()
             import numpy as _np
+
             N, C, H, W = inp_np.shape
             Cout, Cin, KH, KW = w_np.shape
             outH = H - KH + 1
@@ -40,8 +41,11 @@ class UHOPConv2DFunction(Function):
                             for ci in range(Cin):
                                 for ky in range(KH):
                                     for kx in range(KW):
-                                        s += inp_np[n,ci,y+ky,x+kx] * w_np[co,ci,ky,kx]
-                            out[n,co,y,x] = s
+                                        s += (
+                                            inp_np[n, ci, y + ky, x + kx]
+                                            * w_np[co, ci, ky, kx]
+                                        )
+                            out[n, co, y, x] = s
             out_t = torch.from_numpy(out).to(input_t.device)
         ctx.save_for_backward(input_t, weight_t)
         ctx.stride = stride
@@ -52,15 +56,26 @@ class UHOPConv2DFunction(Function):
     def backward(ctx, grad_output):
         input_t, weight_t = ctx.saved_tensors
         # Fallback: compute gradients using torch CPU autograd for correctness (inefficient).
-        import torch
-        import torch.nn.functional as F
         from torch.nn.grad import conv2d_input, conv2d_weight
+
         input_cpu = input_t.detach().cpu()
         weight_cpu = weight_t.detach().cpu()
         grad_out_cpu = grad_output.detach().cpu()
         # Compute grads directly using torch.nn.grad helpers (no new graph built)
-        grad_input = conv2d_input(input_cpu.shape, weight_cpu, grad_out_cpu, stride=ctx.stride, padding=ctx.padding)
-        grad_weight = conv2d_weight(input_cpu, weight_cpu.shape, grad_out_cpu, stride=ctx.stride, padding=ctx.padding)
+        grad_input = conv2d_input(
+            input_cpu.shape,
+            weight_cpu,
+            grad_out_cpu,
+            stride=ctx.stride,
+            padding=ctx.padding,
+        )
+        grad_weight = conv2d_weight(
+            input_cpu,
+            weight_cpu.shape,
+            grad_out_cpu,
+            stride=ctx.stride,
+            padding=ctx.padding,
+        )
         grad_input = grad_input.to(grad_output.device)
         grad_weight = grad_weight.to(grad_output.device)
         return grad_input, grad_weight, None, None

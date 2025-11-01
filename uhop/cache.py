@@ -1,10 +1,10 @@
 # uhop/cache.py
-import os
-import json
 import hashlib
+import json
+import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Any, Dict, List, Optional, Tuple
 
 CACHE_DIR = Path(os.path.expanduser("~")) / ".uhop_mvp_cache"
 CACHE_VERSION = 1
@@ -72,9 +72,7 @@ class UhopCache:
                 fp = Path(p)
                 if fp.exists() and fp.is_file():
                     data = fp.read_bytes()
-                    enriched.setdefault(
-                        "source_hash", hashlib.sha256(data).hexdigest()
-                    )
+                    enriched.setdefault("source_hash", hashlib.sha256(data).hexdigest())
             except Exception:
                 pass
         # Timestamp and version
@@ -158,6 +156,7 @@ class UhopAutotune:
     Persist simple autotune parameters (like OpenCL local sizes) keyed by
     (backend, op, kernel_name, device, shape_key).
     """
+
     def __init__(self, cache_dir: Optional[Path] = None):
         self.cache_dir = cache_dir or CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -260,6 +259,7 @@ class KernelRegistry:
     (device_name, source_hash).
     Note: OpenCL binaries may be vendor/driver specific; fall back gracefully.
     """
+
     def __init__(self, cache_dir: Optional[Path] = None):
         self.cache_dir = cache_dir or CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -294,9 +294,7 @@ class KernelRegistry:
         except Exception:
             return ""
 
-    def load_opencl_binary(
-        self, device: str, source_hash: str
-    ) -> Optional[str]:
+    def load_opencl_binary(self, device: str, source_hash: str) -> Optional[str]:
         idx = self._read()
         key = self._key("opencl", device, source_hash)
         rec = idx.get(key)
@@ -312,6 +310,7 @@ class OpenCLBufferPool:
     Very simple OpenCL buffer pool keyed by (ctx_id, flags, size).
     Exact-size match only.
     """
+
     def __init__(self):
         self._pool: Dict[Tuple[int, int, int], Any] = {}
 
@@ -322,12 +321,13 @@ class OpenCLBufferPool:
             return buf
         # Create a new buffer; caller is responsible for writing data
         import pyopencl as cl  # type: ignore
+
         buf = cl.Buffer(ctx, flags, size)
         self._pool[key] = buf
         return buf
+
 
 # singleton buffer pool
 
 
 OPENCL_BUFFER_POOL = OpenCLBufferPool()
-

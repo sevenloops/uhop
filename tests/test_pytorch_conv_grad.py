@@ -2,13 +2,18 @@
 import pytest
 import torch
 import torch.nn.functional as F
+
 from uhop.pytorch_wrappers import UHOPConv2DFunction
 
-@pytest.mark.parametrize("N,Cin,H,W,Cout,KH,KW", [
-    (2, 3, 16, 16, 4, 3, 3),
-    (1, 1, 8, 8, 1, 3, 3),
-])
-def test_uhoP_conv2d_backward_matches_torch(N,Cin,H,W,Cout,KH,KW):
+
+@pytest.mark.parametrize(
+    "N,Cin,H,W,Cout,KH,KW",
+    [
+        (2, 3, 16, 16, 4, 3, 3),
+        (1, 1, 8, 8, 1, 3, 3),
+    ],
+)
+def test_uhoP_conv2d_backward_matches_torch(N, Cin, H, W, Cout, KH, KW):
     torch.manual_seed(0)
     x = torch.randn(N, Cin, H, W, dtype=torch.float32, requires_grad=True)
     w = torch.randn(Cout, Cin, KH, KW, dtype=torch.float32, requires_grad=True)

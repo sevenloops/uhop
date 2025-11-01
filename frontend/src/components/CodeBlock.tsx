@@ -19,7 +19,9 @@ const CodeBlock = ({ code, language = "python" }: CodeBlockProps) => {
   return (
     <div className="relative group rounded-lg overflow-hidden border border-border bg-muted/30">
       <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card/50">
-        <span className="text-xs text-muted-foreground font-mono">{language}</span>
+        <span className="text-xs text-muted-foreground font-mono">
+          {language}
+        </span>
         <Button
           variant="ghost"
           size="sm"

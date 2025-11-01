@@ -1,9 +1,6 @@
 import numpy as np
 
-from uhop.validation import (
-    validate_callable,
-    validate_kernel,
-)
+from uhop.validation import validate_callable, validate_kernel
 
 
 def _spec(shape, dtype=np.float32):

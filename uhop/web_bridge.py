@@ -12,6 +12,7 @@ Security:
   - CORS: Access-Control-Allow-Origin: * (local use)
   - Whitelisted commands only: must start with 'uhop' and subcommand in ALLOWED
 """
+
 from __future__ import annotations
 
 import json
@@ -105,7 +106,7 @@ class _Handler(BaseHTTPRequestHandler):
             # Example:
             #   'uhop info --json' ->
             #   [sys.executable, '-m', 'uhop.cli', 'info', '--json']
-            pycmd = [sys.executable, '-m', 'uhop.cli'] + parts[1:]
+            pycmd = [sys.executable, "-m", "uhop.cli"] + parts[1:]
             proc = subprocess.run(
                 pycmd,
                 capture_output=True,

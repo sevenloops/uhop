@@ -4,14 +4,14 @@ Sandbox runner that executes a specified function inside a generated Python modu
 in a separate subprocess with a timeout. Uses .npy files for arguments and results.
 """
 import os
+import subprocess
 import sys
 import tempfile
-import subprocess
-import numpy as np
 from pathlib import Path
-from typing import Any
 
-_SANDBOX_RUNNER = r'''
+import numpy as np
+
+_SANDBOX_RUNNER = r"""
 import sys, importlib.util, numpy as np
 mod_path = sys.argv[1]
 fn_name = sys.argv[2]
@@ -27,9 +27,12 @@ fn = getattr(mod, fn_name)
 args = [np.load(p, allow_pickle=True) for p in args_paths]
 res = fn(*args)
 np.save(out_path, res, allow_pickle=True)
-'''
+"""
 
-def run_generated_python(module_path: str, function_name: str, *args, timeout: int = 10):
+
+def run_generated_python(
+    module_path: str, function_name: str, *args, timeout: int = 10
+):
     module_path = str(Path(module_path).resolve())
     with tempfile.TemporaryDirectory() as td:
         arg_paths = []
@@ -44,6 +47,8 @@ def run_generated_python(module_path: str, function_name: str, *args, timeout: i
         cmd = [sys.executable, runner, module_path, function_name, *arg_paths, out_path]
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         if proc.returncode != 0:
-            raise RuntimeError(f"Sandbox failed: rc={proc.returncode}\nSTDOUT:{proc.stdout}\nSTDERR:{proc.stderr}")
+            raise RuntimeError(
+                f"Sandbox failed: rc={proc.returncode}\nSTDOUT:{proc.stdout}\nSTDERR:{proc.stderr}"
+            )
         res = np.load(out_path, allow_pickle=True)
         return res

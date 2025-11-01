@@ -15,6 +15,7 @@ Security and limits:
 Usage (local):
   python -m uhop.web_api --host 0.0.0.0 --port 5824
 """
+
 from __future__ import annotations
 
 import json
@@ -29,12 +30,9 @@ def _cors_headers(h: BaseHTTPRequestHandler):
 
 
 def _info_json() -> dict:
+    from .backends import (is_opencl_available, is_torch_available,
+                           is_triton_available)
     from .hardware import detect_hardware
-    from .backends import (
-        is_torch_available,
-        is_triton_available,
-        is_opencl_available,
-    )
 
     hw = detect_hardware()
     mps_avail = None
@@ -43,18 +41,14 @@ def _info_json() -> dict:
         import torch  # type: ignore
 
         mps_avail = bool(
-            getattr(torch.backends, "mps", None)
-            and torch.backends.mps.is_available()
+            getattr(torch.backends, "mps", None) and torch.backends.mps.is_available()
         )
         try:
-            from .backends.torch_backend import (
-                _torch_device_preference as _pref,
-            )
+            from .backends.torch_backend import \
+                _torch_device_preference as _pref
 
             dev = _pref()
-            torch_pref = (
-                getattr(dev, "type", None) if dev is not None else None
-            )
+            torch_pref = getattr(dev, "type", None) if dev is not None else None
         except Exception:
             torch_pref = None
     except Exception:
@@ -75,7 +69,9 @@ def _info_json() -> dict:
 
 def _demo_matmul(size: int, iters: int) -> dict:
     import time
+
     import numpy as np
+
     from . import optimize
 
     # Enforce strict limits for online demo
@@ -122,11 +118,7 @@ def _demo_matmul(size: int, iters: int) -> dict:
     stdout = (
         "UHOP (optimized over naive): {:.6f} s\n".format(t_uhop)
         + "Naive Python baseline     : {:.6f} s\n".format(t_naive)
-        + (
-            "UHOP wins \u2705\n"
-            if won
-            else "Baseline was faster in this config.\n"
-        )
+        + ("UHOP wins \u2705\n" if won else "Baseline was faster in this config.\n")
     )
     return {
         "code": 0,

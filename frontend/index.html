@@ -1,73 +1,90 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>UHOP — Universal Hardware Optimization Protocol</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UHOP — Universal Hardware Optimization Protocol</title>
 
-		<!-- Canonical -->
-		<link rel="canonical" href="https://sevenloops.github.io/uhop/" />
+    <!-- Canonical -->
+    <link rel="canonical" href="https://sevenloops.github.io/uhop/" />
 
-		<!-- Favicon & App Icons (Vite will resolve with base) -->
-		<link rel="icon" type="image/x-icon" href="favicon.ico" />
-		<link rel="apple-touch-icon" href="WUhop.png" />
-		<link rel="manifest" href="site.webmanifest" />
+    <!-- Favicon & App Icons (Vite will resolve with base) -->
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <link rel="apple-touch-icon" href="WUhop.png" />
+    <link rel="manifest" href="site.webmanifest" />
 
-		<!-- Meta SEO -->
-		<meta name="description" content="UHOP is an AI-powered runtime kernel optimizer that auto-selects the best backend (CUDA, OpenCL, CPU, MPS) and can generate optimized kernels for your hardware." />
-		<meta name="keywords" content="UHOP, kernel optimization, CUDA, OpenCL, Triton, PyTorch, GPU acceleration, AI codegen" />
-		<meta name="author" content="Sevenloops" />
+    <!-- Meta SEO -->
+    <meta
+      name="description"
+      content="UHOP is an AI-powered runtime kernel optimizer that auto-selects the best backend (CUDA, OpenCL, CPU, MPS) and can generate optimized kernels for your hardware."
+    />
+    <meta
+      name="keywords"
+      content="UHOP, kernel optimization, CUDA, OpenCL, Triton, PyTorch, GPU acceleration, AI codegen"
+    />
+    <meta name="author" content="Sevenloops" />
 
-		<!-- Open Graph -->
-		<meta property="og:title" content="UHOP — Universal Hardware Optimization Protocol" />
-		<meta property="og:description" content="AI-powered runtime optimization and kernel generation across CUDA/OpenCL/CPU/MPS. Try the interactive demo portal." />
-		<meta property="og:type" content="website" />
-		<meta property="og:url" content="https://sevenloops.github.io/uhop/" />
-		<meta property="og:image" content="WUhop.png" />
+    <!-- Open Graph -->
+    <meta
+      property="og:title"
+      content="UHOP — Universal Hardware Optimization Protocol"
+    />
+    <meta
+      property="og:description"
+      content="AI-powered runtime optimization and kernel generation across CUDA/OpenCL/CPU/MPS. Try the interactive demo portal."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://sevenloops.github.io/uhop/" />
+    <meta property="og:image" content="WUhop.png" />
 
-		<!-- Twitter -->
-		<meta name="twitter:card" content="summary_large_image" />
-		<meta name="twitter:title" content="UHOP — Universal Hardware Optimization Protocol" />
-		<meta name="twitter:description" content="AI-driven runtime kernel optimization with optional local-agent to run on your hardware." />
-		<meta name="twitter:image" content="WUhop.png" />
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="UHOP — Universal Hardware Optimization Protocol"
+    />
+    <meta
+      name="twitter:description"
+      content="AI-driven runtime kernel optimization with optional local-agent to run on your hardware."
+    />
+    <meta name="twitter:image" content="WUhop.png" />
 
-		<!-- Structured Data (FAQ) to help SEO/LLMs -->
-		<script type="application/ld+json">
-			{
-				"@context": "https://schema.org",
-				"@type": "FAQPage",
-				"mainEntity": [
-					{
-						"@type": "Question",
-						"name": "What is UHOP?",
-						"acceptedAnswer": {
-							"@type": "Answer",
-							"text": "UHOP (Universal Hardware Optimization Protocol) is an AI-powered runtime kernel optimizer that chooses the best backend (CUDA, OpenCL, CPU, MPS) and can generate optimized kernels for your hardware."
-						}
-					},
-					{
-						"@type": "Question",
-						"name": "Does the demo run on my machine or the server?",
-						"acceptedAnswer": {
-							"@type": "Answer",
-							"text": "By default the demo runs on the server. If you start the lightweight UHOP Agent, the portal will run benchmarks on your own device."
-						}
-					},
-					{
-						"@type": "Question",
-						"name": "How do I run the agent?",
-						"acceptedAnswer": {
-							"@type": "Answer",
-							"text": "Install UHOP via pip, then run: uhop-agent --server wss://api.yourdomain.com/agent --token YOUR_AGENT_TOKEN"
-						}
-					}
-				]
-			}
-		</script>
-
-	</head>
-	<body>
-		<div id="root"></div>
-		<script type="module" src="/src/main.tsx"></script>
-	</body>
-	</html>
+    <!-- Structured Data (FAQ) to help SEO/LLMs -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is UHOP?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "UHOP (Universal Hardware Optimization Protocol) is an AI-powered runtime kernel optimizer that chooses the best backend (CUDA, OpenCL, CPU, MPS) and can generate optimized kernels for your hardware."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does the demo run on my machine or the server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "By default the demo runs on the server. If you start the lightweight UHOP Agent, the portal will run benchmarks on your own device."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I run the agent?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Install UHOP via pip, then run: uhop-agent --server wss://api.yourdomain.com/agent --token YOUR_AGENT_TOKEN"
+            }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

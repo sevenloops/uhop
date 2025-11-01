@@ -9,7 +9,7 @@ const Home = () => {
       {/* Hero Section */}
       <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-transparent to-transparent" />
-        
+
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="max-w-4xl mx-auto text-center space-y-8 animate-fade-in">
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold leading-tight">
@@ -17,7 +17,7 @@ const Home = () => {
               <br />
               <span className="gradient-text">Optimization Protocol</span>
             </h1>
-            
+
             <p className="text-xl sm:text-2xl text-muted-foreground max-w-2xl mx-auto">
               AI-Generated Kernel Intelligence — Optimize once, run anywhere.
             </p>
@@ -30,7 +30,11 @@ const Home = () => {
                 </Link>
               </Button>
               <Button size="lg" variant="outline" asChild>
-                <a href="https://github.com/sevenloops/uhop" target="_blank" rel="noopener noreferrer">
+                <a
+                  href="https://github.com/sevenloops/uhop"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   View on GitHub
                 </a>
               </Button>
@@ -43,7 +47,10 @@ const Home = () => {
 
         {/* Floating elements */}
         <div className="absolute top-1/4 left-10 w-20 h-20 rounded-full bg-primary/20 blur-3xl animate-float" />
-        <div className="absolute bottom-1/4 right-10 w-32 h-32 rounded-full bg-secondary/20 blur-3xl animate-float" style={{ animationDelay: '2s' }} />
+        <div
+          className="absolute bottom-1/4 right-10 w-32 h-32 rounded-full bg-secondary/20 blur-3xl animate-float"
+          style={{ animationDelay: "2s" }}
+        />
       </section>
 
       {/* Flow Diagram Section */}
@@ -58,25 +65,32 @@ const Home = () => {
               {
                 icon: Cpu,
                 title: "Detect",
-                description: "Automatically identifies CPU, GPU, or accelerator hardware (CUDA, OpenCL, ROCm)"
+                description:
+                  "Automatically identifies CPU, GPU, or accelerator hardware (CUDA, OpenCL, ROCm)",
               },
               {
                 icon: Zap,
                 title: "Generate",
-                description: "AI creates optimized kernels for fundamental operations (MatMul, Conv2D, ReLU)"
+                description:
+                  "AI creates optimized kernels for fundamental operations (MatMul, Conv2D, ReLU)",
               },
               {
                 icon: Target,
                 title: "Optimize",
-                description: "Benchmarks multiple implementations and validates correctness"
+                description:
+                  "Benchmarks multiple implementations and validates correctness",
               },
               {
                 icon: Database,
                 title: "Cache",
-                description: "Stores fastest implementation per device configuration for instant reuse"
-              }
+                description:
+                  "Stores fastest implementation per device configuration for instant reuse",
+              },
             ].map((step, index) => (
-              <Card key={index} className="relative p-6 bg-card/50 backdrop-blur-sm border-border/50 hover:border-primary/50 transition-all group">
+              <Card
+                key={index}
+                className="relative p-6 bg-card/50 backdrop-blur-sm border-border/50 hover:border-primary/50 transition-all group"
+              >
                 <div className="absolute -top-4 left-6 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary border border-primary/50">
                   {index + 1}
                 </div>
@@ -100,12 +114,23 @@ const Home = () => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto text-center">
             {[
-              { value: "Universal", label: "From CPU to CUDA to ROCm — one protocol" },
-              { value: "AI-Driven", label: "Generates and validates optimized kernels" },
-              { value: "Zero Config", label: "Automatic hardware detection and optimization" }
+              {
+                value: "Universal",
+                label: "From CPU to CUDA to ROCm — one protocol",
+              },
+              {
+                value: "AI-Driven",
+                label: "Generates and validates optimized kernels",
+              },
+              {
+                value: "Zero Config",
+                label: "Automatic hardware detection and optimization",
+              },
             ].map((metric, index) => (
               <div key={index} className="space-y-2">
-                <div className="text-4xl font-bold gradient-text">{metric.value}</div>
+                <div className="text-4xl font-bold gradient-text">
+                  {metric.value}
+                </div>
                 <p className="text-muted-foreground">{metric.label}</p>
               </div>
             ))}
@@ -124,32 +149,43 @@ const Home = () => {
             {[
               {
                 title: "Hardware Detection",
-                description: "Automatically discovers available compute devices and their capabilities"
+                description:
+                  "Automatically discovers available compute devices and their capabilities",
               },
               {
                 title: "Kernel Generation",
-                description: "AI-powered creation of optimized implementations for core operations"
+                description:
+                  "AI-powered creation of optimized implementations for core operations",
               },
               {
                 title: "Performance Benchmarking",
-                description: "Real-world testing to identify the fastest kernel for your hardware"
+                description:
+                  "Real-world testing to identify the fastest kernel for your hardware",
               },
               {
                 title: "Correctness Validation",
-                description: "Ensures generated kernels produce accurate results before deployment"
+                description:
+                  "Ensures generated kernels produce accurate results before deployment",
               },
               {
                 title: "Smart Caching",
-                description: "Persistent storage of optimal implementations per device configuration"
+                description:
+                  "Persistent storage of optimal implementations per device configuration",
               },
               {
                 title: "Backend Abstraction",
-                description: "Seamless support for CUDA, OpenCL, ROCm, and CPU backends"
-              }
+                description:
+                  "Seamless support for CUDA, OpenCL, ROCm, and CPU backends",
+              },
             ].map((feature, index) => (
-              <Card key={index} className="p-6 bg-card/50 backdrop-blur-sm border-border/50 hover:border-primary/30 transition-all">
+              <Card
+                key={index}
+                className="p-6 bg-card/50 backdrop-blur-sm border-border/50 hover:border-primary/30 transition-all"
+              >
                 <h3 className="text-lg font-semibold mb-3">{feature.title}</h3>
-                <p className="text-sm text-muted-foreground">{feature.description}</p>
+                <p className="text-sm text-muted-foreground">
+                  {feature.description}
+                </p>
               </Card>
             ))}
           </div>
@@ -163,14 +199,19 @@ const Home = () => {
             Ready to Optimize Your Hardware?
           </h2>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Start using UHop to automatically detect, generate, and optimize kernels for your hardware.
+            Start using UHop to automatically detect, generate, and optimize
+            kernels for your hardware.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button size="lg" asChild>
               <Link to="/docs">Get Started</Link>
             </Button>
             <Button size="lg" variant="outline" asChild>
-              <a href="https://github.com/sevenloops/uhop" target="_blank" rel="noopener noreferrer">
+              <a
+                href="https://github.com/sevenloops/uhop"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Star on GitHub
               </a>
             </Button>

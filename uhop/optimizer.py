@@ -22,38 +22,26 @@ from typing import Callable, Optional
 
 import numpy as np
 
-from .hardware import detect_hardware
+from .ai_codegen.generator import AICodegen
+# backends
+from .backends import (is_opencl_available, is_torch_available,
+                       is_triton_available, opencl_conv2d, opencl_matmul,
+                       opencl_relu, torch_conv2d, torch_matmul, torch_relu,
+                       triton_matmul, triton_relu)
 from .cache import UhopCache
 from .core.benchmark import benchmark_callable
+from .hardware import detect_hardware
 from .sandbox import run_generated_python
-from .ai_codegen.generator import AICodegen
 from .validation import validate_kernel
-
-# backends
-from .backends import (
-    is_torch_available,
-    torch_matmul,
-    torch_conv2d,
-    torch_relu,
-    is_triton_available,
-    triton_matmul,
-    triton_relu,
-    is_opencl_available,
-    opencl_matmul,
-    opencl_conv2d,
-    opencl_relu,
-)
 
 
 def _torch_has_accelerator() -> bool:
     try:
         import torch  # type: ignore
-        return (
-            bool(getattr(torch, "cuda", None) and torch.cuda.is_available())
-            or (
-                getattr(torch.backends, "mps", None) is not None
-                and torch.backends.mps.is_available()
-            )
+
+        return bool(getattr(torch, "cuda", None) and torch.cuda.is_available()) or (
+            getattr(torch.backends, "mps", None) is not None
+            and torch.backends.mps.is_available()
         )
     except Exception:
         return False
@@ -69,6 +57,7 @@ class UHopOptimizer:
         self.codegen = AICodegen()
         try:
             import pycuda  # type: ignore  # noqa: F401
+
             self._pycuda_available = True
         except Exception:
             self._pycuda_available = False
@@ -83,9 +72,9 @@ class UHopOptimizer:
     ):
         if not self._pycuda_available:
             raise RuntimeError("pycuda not available")
-        from pycuda.compiler import SourceModule  # type: ignore
-        import pycuda.driver as cuda  # type: ignore
         import numpy as _np
+        import pycuda.driver as cuda  # type: ignore
+        from pycuda.compiler import SourceModule  # type: ignore
 
         src = source_path.read_text()
         mod = SourceModule(src)
@@ -128,6 +117,7 @@ class UHopOptimizer:
             def _sig_from_val(v):
                 try:
                     import torch  # type: ignore
+
                     if isinstance(v, torch.Tensor):
                         dev = getattr(v.device, "type", "cpu")
                         return (
@@ -140,6 +130,7 @@ class UHopOptimizer:
                     pass
                 try:
                     import numpy as _np
+
                     if isinstance(v, _np.ndarray):
                         return (
                             "numpy",
@@ -223,9 +214,7 @@ class UHopOptimizer:
                             )
                         if backend == "ai_python":
                             path = rec.get("path")
-                            fname = rec.get(
-                                "function", f"generated_{op_name}"
-                            )
+                            fname = rec.get("function", f"generated_{op_name}")
                             arr0 = np.array(a)
                             arr1 = np.array(b) if b is not None else None
                             return run_generated_python(
@@ -242,7 +231,7 @@ class UHopOptimizer:
                 # Example: UHOP_BACKEND_PREFERENCE="opencl,torch,triton,cpu,numpy"
                 pref = os.environ.get("UHOP_BACKEND_PREFERENCE")
                 if pref:
-                    order = [p.strip().lower() for p in pref.split(',') if p.strip()]
+                    order = [p.strip().lower() for p in pref.split(",") if p.strip()]
 
                     def _try_backend(name: str):
                         try:
@@ -569,7 +558,10 @@ class UHopOptimizer:
                         arr0 = np.array(a)
                         arr1 = np.array(b) if b is not None else None
                         return run_generated_python(
-                            str(ai_path), f"generated_{op_name}", arr0, arr1,
+                            str(ai_path),
+                            f"generated_{op_name}",
+                            arr0,
+                            arr1,
                             timeout=sandbox_timeout,
                         )
 

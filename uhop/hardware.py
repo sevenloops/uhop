@@ -6,11 +6,12 @@ that attempts to detect the most capable device available (CUDA via PyTorch,
 then OpenCL GPU/CPU, then generic CPU) with a few informative fields for CLI
 and runtime decision reporting.
 """
+
 import platform
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
- 
+
 @dataclass
 class HardwareProfile:
     vendor: str
@@ -18,7 +19,7 @@ class HardwareProfile:
     name: Optional[str] = None
     details: Dict[str, Any] = None
 
- 
+
 def detect_hardware() -> HardwareProfile:
     """
     Simple multi-backend hardware detection (best-effort):
@@ -30,6 +31,7 @@ def detect_hardware() -> HardwareProfile:
     # 1) Torch CUDA (NVIDIA)
     try:
         import torch  # type: ignore
+
         if hasattr(torch, "cuda") and torch.cuda.is_available():
             name = torch.cuda.get_device_name(0)
             return HardwareProfile(
@@ -44,6 +46,7 @@ def detect_hardware() -> HardwareProfile:
     # 2) OpenCL GPU (AMD/Intel/NVIDIA)
     try:
         import pyopencl as cl  # type: ignore
+
         plats = cl.get_platforms()
         # Prefer a GPU device
         for p in plats:

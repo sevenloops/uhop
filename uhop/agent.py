@@ -22,6 +22,7 @@ Protocol (JSON over WebSocket):
 Usage:
   uhop-agent --server ws://localhost:8787/agent --token <optional>
 """
+
 from __future__ import annotations
 
 import argparse
@@ -72,20 +73,23 @@ def _generate_kernel(target: str = "opencl") -> Dict[str, Any]:
 
     Returns { language, code } or raises on error.
     """
-    import subprocess
     import glob
+    import subprocess
     from pathlib import Path
 
     # Prefer the same Python that runs the agent
     py = sys.executable or "python"
     root = Path(__file__).resolve().parent.parent
-    env = os.environ.copy()
 
     # Invoke CLI; if OPENAI_API_KEY isn't set, backend/portal should handle fallback messaging.
     cmd = [py, "-m", "uhop.cli", "ai-generate", "matmul", "--target", target]
-    p = subprocess.run(cmd, cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    p = subprocess.run(
+        cmd, cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
     if p.returncode != 0:
-        raise RuntimeError(f"ai-generate failed: {p.stderr.strip() or p.stdout.strip()}")
+        raise RuntimeError(
+            f"ai-generate failed: {p.stderr.strip() or p.stdout.strip()}"
+        )
 
     gen_dir = root / "uhop" / "generated_kernels"
     files = sorted(
@@ -101,7 +105,10 @@ def _generate_kernel(target: str = "opencl") -> Dict[str, Any]:
 
 def run_agent(cfg: AgentConfig, *, debug: bool = False):
     if websocket is None:
-        print("websocket-client not installed. Please install with: pip install websocket-client", file=sys.stderr)
+        print(
+            "websocket-client not installed. Please install with: pip install websocket-client",
+            file=sys.stderr,
+        )
         sys.exit(2)
 
     url = cfg.server
@@ -118,7 +125,7 @@ def run_agent(cfg: AgentConfig, *, debug: bool = False):
                     pass
             try:
                 ws = websocket.create_connection(try_url, timeout=5)
-            except Exception as e:
+            except Exception:
                 # IPv6/localhost issues: try 127.0.0.1
                 if try_url.startswith("ws://localhost"):
                     try_url = try_url.replace("ws://localhost", "ws://127.0.0.1")
@@ -132,15 +139,30 @@ def run_agent(cfg: AgentConfig, *, debug: bool = False):
                 ws.settimeout(None)
             except Exception:
                 pass
-            _send(ws, {"type": "hello", "agent": "uhop-agent", "version": "0.1.0", "token": cfg.token})
-            _send(ws, {"type": "log", "level": "info", "line": f"[agent] connected to {try_url}"})
+            _send(
+                ws,
+                {
+                    "type": "hello",
+                    "agent": "uhop-agent",
+                    "version": "0.1.0",
+                    "token": cfg.token,
+                },
+            )
+            _send(
+                ws,
+                {
+                    "type": "log",
+                    "level": "info",
+                    "line": f"[agent] connected to {try_url}",
+                },
+            )
 
             while True:
                 try:
                     raw = ws.recv()
                 except Exception as e:
                     # websocket-client raises WebSocketTimeoutException on idle if timeout set; just continue
-                    if e.__class__.__name__ == 'WebSocketTimeoutException':
+                    if e.__class__.__name__ == "WebSocketTimeoutException":
                         continue
                     raise
                 if not raw:
@@ -157,24 +179,85 @@ def run_agent(cfg: AgentConfig, *, debug: bool = False):
                     try:
                         if action == "info":
                             data = _info_json()
-                            _send(ws, {"type": "response", "id": req_id, "ok": True, "data": data})
+                            _send(
+                                ws,
+                                {
+                                    "type": "response",
+                                    "id": req_id,
+                                    "ok": True,
+                                    "data": data,
+                                },
+                            )
                         elif action == "run_demo":
                             size = int(params.get("size", 128))
                             iters = int(params.get("iters", 2))
-                            _send(ws, {"type": "log", "level": "info", "line": f"[agent] running demo size={size} iters={iters}"})
+                            _send(
+                                ws,
+                                {
+                                    "type": "log",
+                                    "level": "info",
+                                    "line": f"[agent] running demo size={size} iters={iters}",
+                                },
+                            )
                             data = _run_demo(size, iters)
-                            _send(ws, {"type": "response", "id": req_id, "ok": True, "data": data})
+                            _send(
+                                ws,
+                                {
+                                    "type": "response",
+                                    "id": req_id,
+                                    "ok": True,
+                                    "data": data,
+                                },
+                            )
                         elif action == "generate_kernel":
                             target = str(params.get("target", "opencl"))
-                            _send(ws, {"type": "log", "level": "info", "line": f"[agent] generating kernel target={target}"})
+                            _send(
+                                ws,
+                                {
+                                    "type": "log",
+                                    "level": "info",
+                                    "line": f"[agent] generating kernel target={target}",
+                                },
+                            )
                             data = _generate_kernel(target)
-                            _send(ws, {"type": "response", "id": req_id, "ok": True, "data": data})
+                            _send(
+                                ws,
+                                {
+                                    "type": "response",
+                                    "id": req_id,
+                                    "ok": True,
+                                    "data": data,
+                                },
+                            )
                         else:
-                            _send(ws, {"type": "response", "id": req_id, "ok": False, "error": f"unknown action: {action}"})
+                            _send(
+                                ws,
+                                {
+                                    "type": "response",
+                                    "id": req_id,
+                                    "ok": False,
+                                    "error": f"unknown action: {action}",
+                                },
+                            )
                     except Exception as e:
-                        _send(ws, {"type": "response", "id": req_id, "ok": False, "error": str(e)})
+                        _send(
+                            ws,
+                            {
+                                "type": "response",
+                                "id": req_id,
+                                "ok": False,
+                                "error": str(e),
+                            },
+                        )
                         tb = traceback.format_exc()
-                        _send(ws, {"type": "log", "level": "error", "line": f"[agent] error: {e}\n{tb}"})
+                        _send(
+                            ws,
+                            {
+                                "type": "log",
+                                "level": "error",
+                                "line": f"[agent] error: {e}\n{tb}",
+                            },
+                        )
                 # ignore other message types for now
 
         except KeyboardInterrupt:
@@ -194,12 +277,18 @@ def run_agent(cfg: AgentConfig, *, debug: bool = False):
 
 def main(argv: Optional[list[str]] = None):
     ap = argparse.ArgumentParser(description="UHOP Local Agent")
-    ap.add_argument("--server", type=str, default=os.environ.get("UHOP_AGENT_SERVER", "ws://localhost:8787/agent"))
+    ap.add_argument(
+        "--server",
+        type=str,
+        default=os.environ.get("UHOP_AGENT_SERVER", "ws://localhost:8787/agent"),
+    )
     ap.add_argument("--token", type=str, default=os.environ.get("UHOP_AGENT_TOKEN"))
     ap.add_argument("--no-reconnect", action="store_true")
     ap.add_argument("--debug", action="store_true")
     args = ap.parse_args(argv)
-    cfg = AgentConfig(server=args.server, token=args.token, reconnect=not args.no_reconnect)
+    cfg = AgentConfig(
+        server=args.server, token=args.token, reconnect=not args.no_reconnect
+    )
     run_agent(cfg, debug=args.debug)
 
 

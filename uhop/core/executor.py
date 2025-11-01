@@ -7,6 +7,7 @@ Executor wrappers:
 
 import numpy as np
 
+
 class CudaExecutor:
     def __init__(self, source_code: str = None, module_obj=None):
         """
@@ -17,12 +18,15 @@ class CudaExecutor:
         self.module = module_obj
         if self.module is None and self.source_code is not None:
             from pycuda.compiler import SourceModule
+
             self.module = SourceModule(self.source_code)
 
-    def run_matmul(self, func_name: str, A: np.ndarray, B: np.ndarray, block=(16,16,1)):
-        import pycuda.driver as cuda
+    def run_matmul(
+        self, func_name: str, A: np.ndarray, B: np.ndarray, block=(16, 16, 1)
+    ):
         import numpy as _np
-        from pycuda import gpuarray
+        import pycuda.driver as cuda
+
         if self.module is None:
             raise RuntimeError("CUDA module not compiled")
         func = self.module.get_function(func_name)
@@ -39,13 +43,24 @@ class CudaExecutor:
         cuda.memcpy_htod(B_gpu, B)
         # grid dims
         grid = ((K + block[0] - 1) // block[0], (N + block[1] - 1) // block[1])
-        func(A_gpu, B_gpu, C_gpu, _np.int32(N), _np.int32(M), _np.int32(K), block=block, grid=grid)
+        func(
+            A_gpu,
+            B_gpu,
+            C_gpu,
+            _np.int32(N),
+            _np.int32(M),
+            _np.int32(K),
+            block=block,
+            grid=grid,
+        )
         cuda.memcpy_dtoh(C, C_gpu)
         return C
+
 
 class CpuExecutor:
     @staticmethod
     def matmul(A, B):
         return np.array(A) @ np.array(B)
+
 
 # Removed legacy kernel_cache and stubbed device persistence code (not used in tests/examples)

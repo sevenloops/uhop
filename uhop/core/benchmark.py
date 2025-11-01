@@ -2,9 +2,9 @@
 """
 Benchmark helpers for UHOP. Ensures warm-up and correct device synchronization.
 """
-from time import perf_counter
 from statistics import median
-from typing import Callable, Iterable, Optional, Any, List
+from time import perf_counter
+from typing import Any, Callable, Iterable, List, Optional
 
 
 def benchmark_callable(
@@ -25,7 +25,7 @@ def benchmark_callable(
     timings: List[float] = []
     # warmup
     for _ in range(warmup):
-        res = fn(*args)
+        fn(*args)
         if sync_fn:
             try:
                 sync_fn()
@@ -45,7 +45,7 @@ def benchmark_callable(
             except Exception:
                 start_event = None
         t0 = perf_counter()
-        res = fn(*args)
+        fn(*args)
         if end_event:
             try:
                 # If end_event returns a device timestamp (seconds), prefer it
@@ -65,24 +65,35 @@ def benchmark_callable(
     return median(timings)
 
 
-def measure_time(func: Callable[[], Any], sync_fn: Optional[Callable[[], None]] = None, warmup=3, repeat=10) -> float:
+def measure_time(
+    func: Callable[[], Any],
+    sync_fn: Optional[Callable[[], None]] = None,
+    warmup=3,
+    repeat=10,
+) -> float:
     """Deprecated convenience wrapper; prefer benchmark_callable.
     Keeps API but adds optional sync_fn.
     """
     for _ in range(warmup):
         func()
         if sync_fn:
-            try: sync_fn()
-            except Exception: pass
+            try:
+                sync_fn()
+            except Exception:
+                pass
     times = []
     for _ in range(repeat):
         if sync_fn:
-            try: sync_fn()
-            except Exception: pass
+            try:
+                sync_fn()
+            except Exception:
+                pass
         t0 = perf_counter()
         func()
         if sync_fn:
-            try: sync_fn()
-            except Exception: pass
+            try:
+                sync_fn()
+            except Exception:
+                pass
         times.append(perf_counter() - t0)
     return median(times)

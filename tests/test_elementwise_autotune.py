@@ -1,19 +1,19 @@
-import json
-import pytest
-import numpy as np
-
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 try:
     import cupy as cp  # type: ignore
 except Exception:
     cp = None
 
-from uhop import ops_registry
 from uhop import autotuner
 from uhop.backends import cupy_wrapper
 
-pytestmark = pytest.mark.skipif(cp is None, reason="cupy required to run CUDA autotuner tests")
+pytestmark = pytest.mark.skipif(
+    cp is None, reason="cupy required to run CUDA autotuner tests"
+)
 
 
 def test_autotune_add_and_correctness(tmp_path):
@@ -23,7 +23,9 @@ def test_autotune_add_and_correctness(tmp_path):
         cache_file.unlink()
 
     size = 1_000_00  # 100k elements
-    best = autotuner.get_cached_or_tune("add", size=size, dtype="float32", device="cuda")
+    best = autotuner.get_cached_or_tune(
+        "add", size=size, dtype="float32", device="cuda"
+    )
     assert "latency_s" in best
     assert best["latency_s"] > 0
 
@@ -32,6 +34,7 @@ def test_autotune_add_and_correctness(tmp_path):
     context = best["kernel_source_context"]
     src = template_path.read_text()
     from jinja2 import Template
+
     source = Template(src).render(**context)
     kernel = cupy_wrapper.CupyKernel(source, context.get("KERNEL_NAME", "elem_op"))
 
