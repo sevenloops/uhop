@@ -5,6 +5,7 @@ extend-ignore = E203, W503, E731, E501
 exclude =
     .git,
     .venv,
+    .deps,
     venv,
     env,
     build,

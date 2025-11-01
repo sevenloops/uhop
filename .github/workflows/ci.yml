@@ -27,9 +27,9 @@ jobs:
       - name: Lint (flake8)
         run: flake8 .
       - name: Format check (black)
-        run: black --check .
+        run: black --check uhop tests
       - name: Import sort check (isort)
-        run: isort --profile black --check-only .
+        run: isort --profile black --check-only uhop tests
       - name: Run tests (pytest, baseline)
         env:
           UHOP_FORCE_BASELINE: "1"
