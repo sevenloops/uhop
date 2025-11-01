@@ -2,6 +2,20 @@
 max-line-length = 120
 extend-ignore = E203, W503, E731, E501
 # Reduce noise in non-library code
+exclude =
+    .git,
+    .venv,
+    venv,
+    env,
+    build,
+    dist,
+    frontend,
+    backend,
+    docs,
+    issues,
+    examples,
+    uhop/generated_kernels
 per-file-ignores =
     tests/*: E501, E731
     uhop/benchmarks/*: E501, E731
+    uhop/generated_kernels/*.py: W292, W293
