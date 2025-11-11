@@ -1,0 +1,37 @@
+name: Sync roadmap issues
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'issues/**'
+      - 'scripts/sync_issues.py'
+      - '.github/workflows/sync_issues.yml'
+  schedule:
+    - cron: '0 6 * * *'
+
+concurrency:
+  group: sync-issues-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync_issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install --upgrade pip requests
+
+      - name: Sync issues from /issues directory
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          python scripts/sync_issues.py --dir issues --label auto:roadmap --close-missing

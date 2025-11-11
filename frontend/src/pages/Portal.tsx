@@ -10,6 +10,20 @@ const envAny = import.meta as unknown as { env?: Record<string, string> };
 const API_BASE: string =
   envAny?.env?.VITE_BACKEND_URL || "http://localhost:8787";
 
+// Types for KPI snapshot returned by the backend
+type KpiQuantiles = {
+  count?: number;
+  p50?: number;
+  p90?: number;
+  p99?: number;
+  mean?: number;
+};
+
+type KpiSnapshot = {
+  backend_selection_counts?: Record<string, number>;
+  backend_latency_quantiles?: Record<string, KpiQuantiles>;
+};
+
 export default function Portal() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
@@ -28,7 +42,7 @@ export default function Portal() {
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [showHelp, setShowHelp] = useState<boolean>(false);
-  const [kpi, setKpi] = useState<any | null>(null);
+  const [kpi, setKpi] = useState<KpiSnapshot | null>(null);
 
   useEffect(() => {
     let closed = false;
@@ -571,14 +585,14 @@ export default function Portal() {
                         </tr>
                       </thead>
                       <tbody>
-                        {Object.entries(kpi.backend_selection_counts || {}).map(
-                          ([b, c]: [string, any]) => (
+                        {Object.entries(
+                          kpi.backend_selection_counts ?? {},
+                        ).map(([b, c]: [string, number]) => (
                             <tr key={b}>
                               <td className="py-1 pr-4">{b}</td>
                               <td className="py-1">{String(c)}</td>
                             </tr>
-                          ),
-                        )}
+                        ))}
                       </tbody>
                     </table>
                   </div>
@@ -611,8 +625,8 @@ export default function Portal() {
                       </thead>
                       <tbody>
                         {Object.entries(
-                          kpi.backend_latency_quantiles || {},
-                        ).map(([b, q]: [string, any]) => (
+                          kpi.backend_latency_quantiles ?? {},
+                        ).map(([b, q]: [string, KpiQuantiles]) => (
                           <tr key={b}>
                             <td className="py-1 pr-4">{b}</td>
                             <td className="py-1 pr-4">

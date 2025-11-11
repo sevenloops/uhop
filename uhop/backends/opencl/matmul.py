@@ -19,7 +19,8 @@ except Exception:  # pragma: no cover
 
 from .context import get_ctx_queue, is_opencl_available
 from .autotune import OCLAutotune
-from .validation import prevalidate_matmul
+from .validation import prevalidate_matmul, _compute_local_size
+from ..opencl_backend import _load_matmul_tiled_source as _load_matmul_tiled_source
 from .clblast import load_clblast_safe, current_device_name
 from ... import config as _cfg
 from ...cache import OPENCL_BUFFER_POOL, KernelRegistry
@@ -66,11 +67,10 @@ class MatmulOp:
         for tile in [8,16,32]:
             for vec in vec_cands:
                 try:
-                    src = open(_cfg.get("UHOP_KERNEL_MATMUL_TILED_PATH") or str((__file__).rsplit('/',4)[0] + '/kernels/opencl/matmul_tiled.cl')).read()
+                    # Use centralized loader so tests can monkeypatch failures
+                    src = _load_matmul_tiled_source()
                 except Exception:
-                    from pathlib import Path as _Path
-                    tmp_path = _Path(__file__).resolve().parents[2]/"kernels"/"opencl"/"matmul_tiled.cl"
-                    src = tmp_path.read_text()
+                    continue
                 build_opts = f"-D TILE={tile} -D VEC={vec}" + (" -D GWS_FLIP=1" if flip else "")
                 try:
                     prg = cl.Program(ctx, src).build(options=build_opts)
@@ -93,11 +93,13 @@ class MatmulOp:
                     continue
                 try:
                     kn.set_args(a_buf,b_buf,c_buf,_np.int32(N),_np.int32(M),_np.int32(K))
-                    evt = cl.enqueue_nd_range_kernel(q, kn, gsz, (tile,tile))
+                    lsz = _compute_local_size(tile, q.device)
+                    evt = cl.enqueue_nd_range_kernel(q, kn, gsz, lsz)
                     evt.wait()
                     dt = (evt.profile.end - evt.profile.start)*1e-9 if hasattr(evt,'profile') else 0.0
                 except Exception:
-                    dt = 0.0
+                    # Skip invalid candidates (e.g., oversized local size)
+                    continue
                 if dt < best_t:
                     best_t = dt
                     best = (tile, vec, kn, a_buf,b_buf,c_buf, gsz)
@@ -107,6 +109,9 @@ class MatmulOp:
         # Prevalidate best kernel before committing params
         tile, vec, kn, a_buf,b_buf,c_buf, gsz = best
         errv = prevalidate_matmul(ctx,q,kn,tile,flip)
+        # Treat NaN validation error as unstable
+        if _np.isnan(errv):
+            errv = 1e9
         params = {"tile": tile, "vec": vec, "prevalidate_err": errv, "tuned_at": time.time()}
         # Clear any previous retune suggestion now that we're retuning
         params["retune_suggested"] = False
@@ -211,13 +216,16 @@ class MatmulOp:
                 tile = int(params.get("tile", 16))
                 vec = int(params.get("vec", 1))
                 try:
-                    src = open(_cfg.get("UHOP_KERNEL_MATMUL_TILED_PATH") or str((__file__).rsplit('/',4)[0] + '/kernels/opencl/matmul_tiled.cl')).read()
-                except Exception:
-                    from pathlib import Path as _Path
-                    tmp_path = _Path(__file__).resolve().parents[2]/"kernels"/"opencl"/"matmul_tiled.cl"
-                    src = tmp_path.read_text()
+                    # Use centralized loader so tests can monkeypatch failures
+                    src = _load_matmul_tiled_source()
+                except Exception as e:
+                    _log.warning(f"tiled source load failed {e}; fallback naive")
+                    impl = "naive"
+                    src = None  # type: ignore
                 build_opts = f"-D TILE={tile} -D VEC={vec}" + (" -D GWS_FLIP=1" if flip else "")
                 try:
+                    if src is None:
+                        raise RuntimeError("no source for tiled kernel")
                     prg = cl.Program(ctx, src).build(options=build_opts)
                     kn = cl.Kernel(prg, "matmul_tiled")
                 except Exception as e:
@@ -233,17 +241,26 @@ class MatmulOp:
                     b_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=B)
                     c_buf = cl.Buffer(ctx, mf.WRITE_ONLY, size=C.nbytes)
                     try:
-                        kn.set_args(a_buf,b_buf,c_buf,_np.int32(N),_np.int32(M),_np.int32(K))
-                        evt = cl.enqueue_nd_range_kernel(q, kn, gsz, (tile,tile))
+                        kn.set_args(a_buf, b_buf, c_buf, _np.int32(N), _np.int32(M), _np.int32(K))
+                        lsz = _compute_local_size(tile, q.device)
+                        evt = cl.enqueue_nd_range_kernel(q, kn, gsz, lsz)
                         cl.enqueue_copy(q, C, c_buf, wait_for=[evt])
                         q.finish()
-                        dt = (evt.profile.end - evt.profile.start)*1e-9 if hasattr(evt,'profile') else 0.0
-                        gflops = (2.0 * N * M * K) / (dt * 1e9) if dt > 0 else 0.0
-                        try:
-                            self.auto.record_profile("opencl","matmul","matmul_tiled",dev_name,shape_key,gflops,dt*1000.0)
-                        except Exception:
-                            pass
-                        return MatmulResult(C, "tiled", ms=dt*1000.0, validated_err=params.get("prevalidate_err"), gflops=gflops if dt>0 else None)
+                        # Guard against driver bugs: if output contains NaN/Inf, mark unstable and fallback to naive
+                        if not _np.isfinite(C).all():
+                            try:
+                                self.auto.set_params("opencl", "matmul", "matmul_tiled", dev_name, shape_key, {"unstable": True})
+                            except Exception:
+                                pass
+                            impl = "naive"
+                        else:
+                            dt = (evt.profile.end - evt.profile.start) * 1e-9 if hasattr(evt, 'profile') else 0.0
+                            gflops = (2.0 * N * M * K) / (dt * 1e9) if dt > 0 else 0.0
+                            try:
+                                self.auto.record_profile("opencl", "matmul", "matmul_tiled", dev_name, shape_key, gflops, dt * 1000.0)
+                            except Exception:
+                                pass
+                            return MatmulResult(C, "tiled", ms=dt * 1000.0, validated_err=params.get("prevalidate_err"), gflops=gflops if dt > 0 else None)
                     except Exception as e:
                         _log.warning(f"tiled exec failed {e}; fallback naive")
                         impl = "naive"
@@ -255,9 +272,12 @@ class MatmulOp:
         a_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=A)
         b_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=B)
         c_buf = cl.Buffer(ctx, mf.WRITE_ONLY, size=C.nbytes)
-        gsz = ((K + vec -1)//vec, N)
-        kn.set_args(a_buf,b_buf,c_buf,_np.int32(N),_np.int32(M),_np.int32(K))
-        evt = cl.enqueue_nd_range_kernel(q, kn, gsz, None)
+        gsz = ((K + vec - 1)//vec, N)
+        kn.set_args(a_buf, b_buf, c_buf, _np.int32(N), _np.int32(M), _np.int32(K))
+        # Use a conservative local size to avoid driver bugs on some devices.
+        # Some AMD drivers return INVALID_WORK_GROUP_SIZE if local size is None here
+        # or produce NaNs for larger inferred sizes.
+        evt = cl.enqueue_nd_range_kernel(q, kn, gsz, (1, 1))
         cl.enqueue_copy(q, C, c_buf, wait_for=[evt])
         q.finish()
         try:

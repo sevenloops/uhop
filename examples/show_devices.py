@@ -39,12 +39,8 @@ try:
             else:
                 kind = str(d.type)
             print(f"    Device {di}: {d.name} [{kind}]")
-    # Build context using our backend policy to see selection
-    from uhop.backends.opencl_backend import _OPENCL_AVAILABLE
-
-    print("pyopencl available via backend:", _OPENCL_AVAILABLE)
-    from uhop.backends.opencl_backend import is_opencl_available
-
+    # Query availability through public facade only (internal sentinel removed)
+    from uhop.backends import is_opencl_available
     print("is_opencl_available():", is_opencl_available())
 except Exception as e:
     print("OpenCL error:", e)
