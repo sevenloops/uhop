@@ -25,6 +25,7 @@ const Docs = () => {
     { id: "autotune-tuning", title: "Autotune & Tuning", icon: Cog },
     { id: "troubleshooting", title: "Troubleshooting", icon: FileText },
     { id: "resources", title: "Resources", icon: Book },
+    { id: "roadmap", title: "Roadmap & KPI", icon: Rocket },
     { id: "api-reference", title: "API Reference", icon: Zap },
   ];
 
@@ -843,6 +844,123 @@ opencl|conv2d|conv2d_tiled|<device>|N<N>_C<C>_H<H>_W<W>_Co<Co>_KH<KH>_KW<KW>_S<S
               </div>
             )}
 
+            {activeSection === "roadmap" && (
+              <div className="space-y-6 animate-fade-in">
+                <div>
+                  <h1 className="text-4xl font-bold mb-4">Roadmap & KPI</h1>
+                  <p className="text-lg text-muted-foreground">
+                    Phased progress overview and performance introspection tools
+                  </p>
+                </div>
+
+                <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">Phases</h2>
+                  <p className="text-muted-foreground mb-4">
+                    UHOP progress is tracked in phases (see repository{" "}
+                    <code className="font-mono">docs/ROADMAP.md</code>):
+                  </p>
+                  <ul className="space-y-2 text-muted-foreground ml-6">
+                    <li>
+                      <strong className="text-foreground">0. Foundation</strong>{" "}
+                      — Decorator, hardware detect, cache, minimal IR
+                      (MatMul/Relu/Fused), Torch shim.
+                    </li>
+                    <li>
+                      <strong className="text-foreground">1. MVP Policy</strong>{" "}
+                      — Backend selection modes (<code>order_probe</code>,{" "}
+                      <code>benchmark</code>), explain CLI, KPI snapshot.
+                    </li>
+                    <li>
+                      <strong className="text-foreground">
+                        2. Performance Parity
+                      </strong>{" "}
+                      — Compute-side vectorization, improved tiling, CLBlast /
+                      GEMM integration.
+                    </li>
+                    <li>
+                      <strong className="text-foreground">
+                        3. AI Autotune Loop
+                      </strong>{" "}
+                      — Generate → validate → profile → retain; schedule search.
+                    </li>
+                    <li>
+                      <strong className="text-foreground">
+                        4. IR Expansion
+                      </strong>{" "}
+                      — More ops (conv, reductions, fusions) & scheduling
+                      strategies.
+                    </li>
+                    <li>
+                      <strong className="text-foreground">
+                        5. Ecosystem & UX
+                      </strong>{" "}
+                      — Dashboard cards, framework training loops, docs polish.
+                    </li>
+                  </ul>
+                </Card>
+
+                <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">
+                    Policy Explain
+                  </h2>
+                  <p className="text-muted-foreground mb-3">
+                    Inspect backend choice and candidate timings for a given
+                    operation.
+                  </p>
+                  <CodeBlock
+                    code={`uhop policy explain matmul --arg-shape 512x512 --arg-shape 512x512 --iters 3 --warmup 1 --stats --mode benchmark\nuhop policy explain relu --arg-shape 1048576 --iters 5 --stats --json`}
+                    language="bash"
+                  />
+                  <p className="text-muted-foreground mt-3">Modes:</p>
+                  <ul className="space-y-2 text-muted-foreground ml-6">
+                    <li>
+                      <code className="font-mono">order_probe</code> — first
+                      available backend in preference order.
+                    </li>
+                    <li>
+                      <code className="font-mono">benchmark</code> — warmup +
+                      iterations; picks fastest median latency.
+                    </li>
+                  </ul>
+                </Card>
+
+                <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">KPI Snapshot</h2>
+                  <p className="text-muted-foreground mb-3">
+                    Generate a point-in-time performance and decision summary.
+                  </p>
+                  <CodeBlock
+                    code={`python -m uhop.cli_kpi --show`}
+                    language="bash"
+                  />
+                  <p className="text-muted-foreground mt-3">
+                    Includes backend selection counts, OpenCL matmul GFLOPS
+                    rows, and Conv2D stage timings (im2col / GEMM / copy /
+                    chunking).
+                  </p>
+                </Card>
+
+                <Card className="p-6 bg-card/50">
+                  <h2 className="text-2xl font-semibold mb-4">
+                    Performance Snapshot (Example)
+                  </h2>
+                  <p className="text-muted-foreground mb-4">
+                    Representative local benchmark results. OpenCL tiled kernels
+                    currently trail optimized CUDA and vendor BLAS on larger
+                    shapes.
+                  </p>
+                  <CodeBlock
+                    code={`{
+  "device": "OpenCL AMD Radeon RX 6800",
+  "matmul": {"256x256": {"opencl_tiled_ms": 0.42, "torch_cpu_ms": 0.65}},
+  "relu": {"1M": {"opencl_ms": 0.08, "torch_cpu_ms": 0.11}}
+}`}
+                    language="json"
+                  />
+                </Card>
+              </div>
+            )}
+
             {activeSection === "resources" && (
               <div className="space-y-6 animate-fade-in">
                 <div>
@@ -856,8 +974,7 @@ opencl|conv2d|conv2d_tiled|<device>|N<N>_C<C>_H<H>_W<W>_Co<Co>_KH<KH>_KW<KW>_S<S
                   <h2 className="text-2xl font-semibold mb-4">Articles</h2>
                   <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
                     <li>
-                      Introducing UHOP — An Open Hardware Optimization Platform
-                      for GPU Compute &nbsp;
+                      Introducing UHOP — An Open Hardware Optimization Platform:{" "}
                       <a
                         href="https://medium.com/@danbis664/introducing-uhop-an-open-hardware-optimization-platform-for-gpu-compute-072420544812?postPublishedType=initial"
                         target="_blank"

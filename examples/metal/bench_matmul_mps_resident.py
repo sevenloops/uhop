@@ -4,11 +4,13 @@ Benchmark matmul on Apple MPS with resident torch tensors.
 Compares UHOP(@optimize("matmul")) vs pure torch.matmul, keeping data on MPS
 to avoid PCIe/host copies that skew smaller benchmarks.
 """
-import time
-import statistics
-import numpy as np
 
+import statistics
+import time
+
+import numpy as np
 import torch
+
 from uhop import optimize
 
 
@@ -41,10 +43,7 @@ def bench(fn, A, B, warmup=2, iters=10):
 
 
 def main():
-    if not (
-        getattr(torch.backends, "mps", None)
-        and torch.backends.mps.is_available()
-    ):
+    if not (getattr(torch.backends, "mps", None) and torch.backends.mps.is_available()):
         print("MPS not available; this example targets Apple Silicon.")
         return
     torch.manual_seed(0)

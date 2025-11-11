@@ -190,9 +190,7 @@ class KernelRegistry:
         ]
 
         for op_name, filename, kernel_names in kernels:
-            self._register(
-                op_name, BackendType.METAL, metal_dir / filename, kernel_names
-            )
+            self._register(op_name, BackendType.METAL, metal_dir / filename, kernel_names)
 
     def _register_opencl_kernels(self):
         """Register OpenCL kernel files."""
@@ -258,9 +256,7 @@ class KernelRegistry:
         ]
 
         for op_name, filename, kernel_names in kernels:
-            self._register(
-                op_name, BackendType.OPENCL, opencl_dir / filename, kernel_names
-            )
+            self._register(op_name, BackendType.OPENCL, opencl_dir / filename, kernel_names)
 
     def _register(
         self,
@@ -280,9 +276,7 @@ class KernelRegistry:
             kernel_names=kernel_names,
         )
 
-    def get_kernel_file(
-        self, operator: str, backend: BackendType
-    ) -> Optional[KernelFileInfo]:
+    def get_kernel_file(self, operator: str, backend: BackendType) -> Optional[KernelFileInfo]:
         """Get kernel file information for an operator and backend."""
         return self._registry.get(operator, {}).get(backend)
 

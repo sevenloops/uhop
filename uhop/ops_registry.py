@@ -10,9 +10,7 @@ from typing import Any, Callable, Dict
 _OPS: Dict[str, Dict[str, Any]] = {}
 
 
-def register_op(
-    name: str, fallback: Callable = None, *, supports_broadcast: bool = True
-):
+def register_op(name: str, fallback: Callable = None, *, supports_broadcast: bool = True):
     """Register an op with optional fallback implementation and metadata."""
     _OPS[name] = {
         "name": name,
@@ -34,10 +32,7 @@ def save_registry(path: str):
     p = Path(path)
     p.write_text(
         json.dumps(
-            {
-                k: {"supports_broadcast": v["supports_broadcast"]}
-                for k, v in _OPS.items()
-            },
+            {k: {"supports_broadcast": v["supports_broadcast"]} for k, v in _OPS.items()},
             indent=2,
         )
     )

@@ -2,12 +2,16 @@
 import hashlib
 import json
 import os
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 CACHE_DIR = Path(os.path.expanduser("~")) / ".uhop_mvp_cache"
 CACHE_VERSION = 1
+
+
+_ENV_LOCK = threading.Lock()
 
 
 class UhopCache:
@@ -151,6 +155,13 @@ class UhopCache:
             self._write_index(idx)
 
 
+# Provide a global cache instance for legacy imports/tests
+try:
+    CACHE = UhopCache()
+except Exception:
+    CACHE = None  # type: ignore
+
+
 class UhopAutotune:
     """
     Persist simple autotune parameters (like OpenCL local sizes) keyed by
@@ -165,8 +176,22 @@ class UhopAutotune:
             self._write({})
 
     def _read(self) -> Dict[str, Any]:
+        """Read autotune file with basic corruption recovery.
+
+        Returns empty dict if unreadable or corrupted JSON.
+        """
         try:
-            return json.loads(self.file.read_text())
+            raw = self.file.read_text()
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            # Preserve original corrupted file for inspection
+            try:
+                bak = self.file.with_suffix(".corrupted")
+                if not bak.exists():
+                    bak.write_text(self.file.read_text())
+            except Exception:
+                pass
+            return {}
         except Exception:
             return {}
 
@@ -240,16 +265,85 @@ class UhopAutotune:
         shape_key: str,
         params: Dict[str, Any],
     ):
+        """Merge params and maintain separate 'unstable' vs 'stable' flags.
+
+        If setting 'unstable': record timestamp. If clearing, move previous
+        unstable state to history for forensic analysis.
+        """
         idx = self._read()
         k = self._key(backend, op, kernel_name, device, shape_key)
-        # merge with existing if present
-        cur = idx.get(k)
-        if isinstance(cur, dict):
-            merged = {**cur, **params}
-        else:
-            merged = {**params}
+        cur = idx.get(k) if isinstance(idx.get(k), dict) else {}
+        merged = {**cur, **params}
+        # Handle unstable state transitions
+        if "unstable" in params:
+            try:
+                if params.get("unstable"):
+                    merged["unstable_since"] = datetime.utcnow().isoformat() + "Z"
+                else:
+                    # Clearing instability; archive prior flag
+                    if cur.get("unstable") and cur.get("unstable_since"):
+                        hist = merged.get("unstable_history")
+                        if not isinstance(hist, list):
+                            hist = []
+                        hist.append(
+                            {"cleared_at": datetime.utcnow().isoformat() + "Z", "since": cur.get("unstable_since")}
+                        )
+                        merged.pop("unstable_since", None)
+                        merged.pop("unstable", None)
+                        merged["unstable_history"] = hist
+            except Exception:
+                pass
         idx[k] = merged
         self._write(idx)
+
+    # Lightweight profiling support: record last GFLOPS and ms for a (backend,op,kernel,device,shape)
+    def record_profile(
+        self, backend: str, op: str, kernel_name: str, device: str, shape_key: str, gflops: float, ms: float
+    ):
+        idx = self._read()
+        k = self._key(backend, op, kernel_name, device, shape_key)
+        cur = idx.get(k)
+        rec = cur if isinstance(cur, dict) else {}
+        rec["last_gflops"] = float(gflops)
+        rec["last_ms"] = float(ms)
+        # Rolling history (keep last 20 entries)
+        import time as _time
+
+        h = rec.get("history")
+        if not isinstance(h, list):
+            h = []
+        h.append({"ts": int(_time.time()), "gflops": float(gflops), "ms": float(ms)})
+        if len(h) > 20:
+            h = h[-20:]
+        rec["history"] = h
+        # Compute simple variance & retune suggestion if enough samples
+        if len(h) >= 5:
+            import statistics as _stats
+
+            ms_vals = [e["ms"] for e in h if "ms" in e]
+            if len(ms_vals) >= 5:
+                try:
+                    mean_ms = _stats.mean(ms_vals)
+                    stdev_ms = _stats.stdev(ms_vals)
+                    rec["var_ms"] = stdev_ms
+                    rec["mean_ms"] = mean_ms
+                    # Retune trigger: relative variance > 15%
+                    if mean_ms > 0 and (stdev_ms / mean_ms) > 0.15:
+                        rec["retune_suggested"] = True
+                except Exception:
+                    pass
+        idx[k] = rec
+        self._write(idx)
+
+    def needs_retune(self, backend: str, op: str, kernel_name: str, device: str, shape_key: str) -> bool:
+        params = self.get_params(backend, op, kernel_name, device, shape_key)
+        if not params:
+            return True
+        if params.get("unstable"):
+            return True
+        if params.get("retune_suggested"):
+            return True
+        return False
 
 
 class KernelRegistry:
@@ -280,7 +374,7 @@ class KernelRegistry:
         return f"{backend}|{device}|{source_hash}"
 
     def save_opencl_binary(
-        self, device: str, source_hash: str, binaries: List[bytes]
+        self, device: str, source_hash: str, binaries: List[bytes], driver_version: str | None = None
     ) -> str:
         idx = self._read()
         key = self._key("opencl", device, source_hash)
@@ -288,17 +382,29 @@ class KernelRegistry:
         # Store the first binary blob
         try:
             out_path.write_bytes(binaries[0])
-            idx[key] = {"path": str(out_path)}
+            meta = {"path": str(out_path)}
+            if driver_version:
+                meta["driver_version"] = driver_version
+            meta["saved_at"] = datetime.utcnow().isoformat() + "Z"
+            idx[key] = meta
             self._write(idx)
             return str(out_path)
         except Exception:
             return ""
 
-    def load_opencl_binary(self, device: str, source_hash: str) -> Optional[str]:
+    def load_opencl_binary(
+        self, device: str, source_hash: str, current_driver_version: str | None = None
+    ) -> Optional[str]:
         idx = self._read()
         key = self._key("opencl", device, source_hash)
         rec = idx.get(key)
         if rec and isinstance(rec, dict):
+            if (
+                current_driver_version
+                and rec.get("driver_version")
+                and rec.get("driver_version") != current_driver_version
+            ):
+                return None
             p = rec.get("path")
             if p and Path(p).exists():
                 return p
@@ -313,18 +419,32 @@ class OpenCLBufferPool:
 
     def __init__(self):
         self._pool: Dict[Tuple[int, int, int], Any] = {}
+        self._lock = threading.Lock()
+        self._hits = 0
+        self._misses = 0
 
     def get(self, ctx, size: int, flags: int):
         key = (id(ctx), int(flags), int(size))
-        buf = self._pool.get(key)
-        if buf is not None:
-            return buf
-        # Create a new buffer; caller is responsible for writing data
-        import pyopencl as cl  # type: ignore
+        with self._lock:
+            buf = self._pool.get(key)
+            if buf is not None:
+                self._hits += 1
+                return buf
+            self._misses += 1
+            # Create a new buffer; caller is responsible for writing data
+            import pyopencl as cl  # type: ignore
 
-        buf = cl.Buffer(ctx, flags, size)
-        self._pool[key] = buf
-        return buf
+            buf = cl.Buffer(ctx, flags, size)
+            self._pool[key] = buf
+            return buf
+
+    def stats(self) -> Dict[str, int]:
+        with self._lock:
+            return {"entries": len(self._pool), "hits": self._hits, "misses": self._misses}
+
+    def clear(self):
+        with self._lock:
+            self._pool.clear()
 
 
 # singleton buffer pool

@@ -38,10 +38,7 @@ def _load_dotenv_fallback() -> bool:
 def _ensure_api_key_warning():
     _load_dotenv_fallback()
     if "OPENAI_API_KEY" not in os.environ:
-        print(
-            "Warning: OPENAI_API_KEY not set. "
-            "AI generation will fail if attempted."
-        )
+        print("Warning: OPENAI_API_KEY not set. " "AI generation will fail if attempted.")
 
 
 @optimize("matmul")

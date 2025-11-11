@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'frontend/**'
-      - '.github/workflows/deploy-frontend-pages.yml'
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend-pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -15,7 +15,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: 'pages'
+  group: "pages"
   cancel-in-progress: true
 
 jobs:
@@ -34,8 +34,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies

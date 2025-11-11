@@ -1,11 +1,11 @@
-name: Sync GitHub Issues from files
+name: Sync Issues from repo issues
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - 'issues/**'
       - '.github/workflows/sync-issues.yml'
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,173 +15,20 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Sync issues from issues/ folder
-        uses: actions/github-script@v7
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const path = require('path');
+          python-version: '3.11'
 
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const baseDir = 'issues';
-            const syncLabel = 'synced-from-folder';
+      - name: Install dependencies
+        run: pip install requests pyyaml
 
-            function walk(dir) {
-              let results = [];
-              if (!fs.existsSync(dir)) return results;
-              const list = fs.readdirSync(dir, { withFileTypes: true });
-              for (const entry of list) {
-                const fullPath = path.join(dir, entry.name);
-                if (entry.isDirectory()) {
-                  results = results.concat(walk(fullPath));
-                } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
-                  results.push(fullPath);
-                }
-              }
-              return results;
-            }
-
-            function parseFrontMatter(text) {
-              const res = { fm: {}, body: text };
-              if (text.startsWith('---\n')) {
-                const endIdx = text.indexOf('\n---\n', 4);
-                if (endIdx !== -1) {
-                  const raw = text.slice(4, endIdx);
-                  res.body = text.slice(endIdx + 5);
-                  const lines = raw.split(/\r?\n/);
-                  let i = 0;
-                  while (i < lines.length) {
-                    const line = lines[i];
-                    const m = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-                    if (m) {
-                      const key = m[1].trim();
-                      let val = m[2].trim();
-                      if ((val.startsWith('[') && val.endsWith(']'))) {
-                        // labels: [a, b]
-                        val = val.slice(1, -1).split(',').map(s => s.trim()).filter(Boolean);
-                      } else if (val === '' && i + 1 < lines.length && lines[i+1].trim().startsWith('- ')) {
-                        // block list
-                        const arr = [];
-                        i++;
-                        while (i < lines.length && lines[i].trim().startsWith('- ')) {
-                          arr.push(lines[i].trim().slice(2).trim());
-                          i++;
-                        }
-                        i--; // compensate for outer increment
-                        val = arr;
-                      }
-                      res.fm[key] = val;
-                    }
-                    i++;
-                  }
-                }
-              }
-              return res;
-            }
-
-            function deriveTitle(filePath, body, fm) {
-              if (fm && typeof fm.title === 'string' && fm.title.trim()) return fm.title.trim();
-              const firstLine = body.split(/\r?\n/).find(l => l.trim().length > 0) || '';
-              const h1 = firstLine.match(/^#\s+(.*)$/);
-              if (h1) return h1[1].trim();
-              return path.basename(filePath).replace(/\.[^/.]+$/, '');
-            }
-
-            async function ensureLabel(name) {
-              try {
-                await github.rest.issues.getLabel({ owner, repo, name });
-              } catch (err) {
-                if (err.status === 404) {
-                  await github.rest.issues.createLabel({ owner, repo, name, color: '0E8A16', description: 'Issues synced from files' });
-                } else {
-                  throw err;
-                }
-              }
-            }
-
-            function buildBody(body, relativePath) {
-              const separator = '\n\n---\n';
-              const marker = `Source: ${relativePath}`;
-              const note = 'Do not edit below this line; changes will be overwritten by CI.';
-              return `${body.trim()}${separator}${marker}\n${note}`;
-            }
-
-            function uniqueLabels(fmLabels) {
-              const base = new Set([syncLabel]);
-              if (Array.isArray(fmLabels)) {
-                for (const l of fmLabels) if (l && typeof l === 'string') base.add(l);
-              } else if (typeof fmLabels === 'string' && fmLabels.trim()) {
-                fmLabels.split(',').map(s => s.trim()).filter(Boolean).forEach(l => base.add(l));
-              }
-              return Array.from(base);
-            }
-
-            // Gather files
-            const files = walk(baseDir);
-            if (!files.length) {
-              core.info('No markdown files found in issues/');
-              return;
-            }
-
-            await ensureLabel(syncLabel);
-
-            // Get existing synced issues (state=all)
-            const existing = await github.paginate(github.rest.issues.listForRepo, {
-              owner, repo, state: 'all', labels: syncLabel, per_page: 100
-            });
-
-            const existingBySource = new Map();
-            for (const issue of existing) {
-              if (issue.pull_request) continue; // skip PRs
-              const m = issue.body && issue.body.match(/Source:\s+([^\s\n]+)/);
-              if (m) existingBySource.set(m[1], issue);
-            }
-
-            const processedSources = new Set();
-            for (const file of files) {
-              const rel = file.replace(/\\/g, '/');
-              const content = fs.readFileSync(file, 'utf8');
-              const { fm, body } = parseFrontMatter(content);
-              const title = deriveTitle(file, body, fm);
-              const finalBody = buildBody(body, rel);
-              const labels = uniqueLabels(fm.labels);
-              const assignees = Array.isArray(fm.assignees)
-                ? fm.assignees.filter(x => typeof x === 'string' && x)
-                : (typeof fm.assignees === 'string' && fm.assignees.trim() ? fm.assignees.split(',').map(s => s.trim()) : undefined);
-
-              const existingIssue = existingBySource.get(rel);
-              if (existingIssue) {
-                // Update if changed
-                const needsUpdate = (existingIssue.title !== title) || (existingIssue.body !== finalBody);
-                if (needsUpdate) {
-                  await github.rest.issues.update({ owner, repo, issue_number: existingIssue.number, title, body: finalBody });
-                }
-                // Sync labels (merge desired)
-                const currentLabels = (existingIssue.labels || []).map(l => typeof l === 'string' ? l : l.name).filter(Boolean);
-                const desired = Array.from(new Set([...currentLabels, ...labels]));
-                await github.rest.issues.setLabels({ owner, repo, issue_number: existingIssue.number, labels: desired });
-                // Optionally reassign
-                if (assignees && assignees.length) {
-                  await github.rest.issues.update({ owner, repo, issue_number: existingIssue.number, assignees });
-                }
-              } else {
-                // Create
-                await github.rest.issues.create({ owner, repo, title, body: finalBody, labels, assignees });
-              }
-              processedSources.add(rel);
-            }
-
-            // Close issues whose source files were removed
-            for (const [src, issue] of existingBySource.entries()) {
-              if (!processedSources.has(src) && issue.state !== 'closed') {
-                await github.rest.issues.update({ owner, repo, issue_number: issue.number, state: 'closed' });
-                await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body: 'Closing automatically because the source file was removed from the repository.' });
-              }
-            }
-
-            core.info(`Processed ${processedSources.size} issue file(s).`);
+      - name: Sync GitHub Issues from /issues
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          python scripts/sync_issues.py --dir issues --label "auto:roadmap" --close-missing

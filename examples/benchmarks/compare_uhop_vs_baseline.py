@@ -3,26 +3,32 @@
 Run UHOP-wrapped conv2d vs baseline Conv2d with identical weights/inputs.
 Report loss and median step time for fair comparison.
 """
-import time
 import statistics
+import time
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+
 from uhop.pytorch_wrappers import UHOPConv2DFunction
+
 
 class UHopCNN(nn.Module):
     def __init__(self):
         super().__init__()
         self.weight = nn.Parameter(torch.empty(8, 3, 3, 3))
-        nn.init.kaiming_uniform_(self.weight, a=5 ** 0.5)
+        nn.init.kaiming_uniform_(self.weight, a=5**0.5)
+
     def forward(self, x):
         return UHOPConv2DFunction.apply(x, self.weight, 1, 0)
+
 
 class BaselineCNN(nn.Module):
     def __init__(self):
         super().__init__()
         self.conv = nn.Conv2d(3, 8, 3, stride=1, padding=0, bias=False)
+
     def forward(self, x):
         return self.conv(x)
 
@@ -60,6 +66,7 @@ def main():
 
     print("Baseline: loss=%.6f, median_step=%.4f s" % (bl_loss, bl_med))
     print("UHOP    : loss=%.6f, median_step=%.4f s" % (uh_loss, uh_med))
+
 
 if __name__ == "__main__":
     main()

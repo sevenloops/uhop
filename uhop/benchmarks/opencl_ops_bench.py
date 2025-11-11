@@ -237,16 +237,8 @@ def bench_elementwise(
     else:
         base_fn = None
 
-    baseline = (
-        _measure_host_callable_ms(base_fn, warmup=1, iters=max(1, iters))
-        if base_fn
-        else {"mean": None}
-    )
-    spd = (
-        (baseline["mean"] / stats["mean"])
-        if (baseline.get("mean") and stats["mean"] > 0)
-        else None
-    )
+    baseline = _measure_host_callable_ms(base_fn, warmup=1, iters=max(1, iters)) if base_fn else {"mean": None}
+    spd = (baseline["mean"] / stats["mean"]) if (baseline.get("mean") and stats["mean"] > 0) else None
 
     # Validation
     vmax = None
@@ -360,23 +352,13 @@ def bench_activations(
     if op == "relu":
         base_fn = lambda: np.maximum(x, 0.0, dtype=np.float32)
     elif op == "gelu":
-        base_fn = (
-            lambda: 0.5 * x * (1.0 + np.tanh(0.7978845608 * (x + 0.044715 * (x**3))))
-        )
+        base_fn = lambda: 0.5 * x * (1.0 + np.tanh(0.7978845608 * (x + 0.044715 * (x**3))))
     elif op == "silu":
         base_fn = lambda: x / (1.0 + np.exp(-x))
     else:
         base_fn = None
-    baseline = (
-        _measure_host_callable_ms(base_fn, warmup=1, iters=max(1, iters))
-        if base_fn
-        else {"mean": None}
-    )
-    spd = (
-        (baseline["mean"] / stats["mean"])
-        if (baseline.get("mean") and stats["mean"] > 0)
-        else None
-    )
+    baseline = _measure_host_callable_ms(base_fn, warmup=1, iters=max(1, iters)) if base_fn else {"mean": None}
+    spd = (baseline["mean"] / stats["mean"]) if (baseline.get("mean") and stats["mean"] > 0) else None
 
     # Validation
     vpass = vmax = vrmax = None
@@ -413,9 +395,7 @@ def bench_activations(
                 mm.append((time.perf_counter() - t0) * 1000.0)
             uhop_mean = float(statistics.mean(mm))
             uhop_spd = (
-                (baseline["mean"] / uhop_mean)
-                if (baseline.get("mean") and uhop_mean and uhop_mean > 0)
-                else None
+                (baseline["mean"] / uhop_mean) if (baseline.get("mean") and uhop_mean and uhop_mean > 0) else None
             )
         except Exception:
             uhop_mean = None
@@ -488,12 +468,8 @@ def bench_reduce_sum(
     median_ms = stats["median"]
 
     # NumPy baseline
-    baseline = _measure_host_callable_ms(
-        lambda: np.sum(x), warmup=1, iters=max(1, iters)
-    )
-    spd = (
-        (baseline["mean"] / mean_ms) if (baseline.get("mean") and mean_ms > 0) else None
-    )
+    baseline = _measure_host_callable_ms(lambda: np.sum(x), warmup=1, iters=max(1, iters))
+    spd = (baseline["mean"] / mean_ms) if (baseline.get("mean") and mean_ms > 0) else None
     # Validation: download final output
     vpass = vmax = vrmax = None
     if validate:
@@ -561,9 +537,7 @@ def bench_matmul(
         lsz = None
 
         def launch():
-            return kn(
-                q, gsz, lsz, A_buf, B_buf, C_buf, np.int32(N), np.int32(M), np.int32(K)
-            )
+            return kn(q, gsz, lsz, A_buf, B_buf, C_buf, np.int32(N), np.int32(M), np.int32(K))
 
     for _ in range(warmup):
         launch().wait()
@@ -577,11 +551,7 @@ def bench_matmul(
 
     # NumPy baseline
     baseline = _measure_host_callable_ms(lambda: A @ B, warmup=1, iters=max(1, iters))
-    spd = (
-        (baseline["mean"] / stats["mean"])
-        if (baseline.get("mean") and stats["mean"] > 0)
-        else None
-    )
+    spd = (baseline["mean"] / stats["mean"]) if (baseline.get("mean") and stats["mean"] > 0) else None
 
     # Validation
     vpass = vmax = vrmax = None
@@ -624,9 +594,7 @@ def bench_matmul(
                 mm.append((time.perf_counter() - t0) * 1000.0)
             uhop_mean = float(statistics.mean(mm))
             uhop_spd = (
-                (baseline["mean"] / uhop_mean)
-                if (baseline.get("mean") and uhop_mean and uhop_mean > 0)
-                else None
+                (baseline["mean"] / uhop_mean) if (baseline.get("mean") and uhop_mean and uhop_mean > 0) else None
             )
         except Exception:
             uhop_mean = None
@@ -727,11 +695,7 @@ def bench_conv2d(
         torch.nn.functional.conv2d(inp_t, w_t, stride=stride, padding=pad)
 
     base = _measure_host_callable_ms(baseline, warmup=1, iters=max(1, iters))
-    spd = (
-        (base["mean"] / stats["mean"])
-        if (base.get("mean") and stats["mean"] > 0)
-        else None
-    )
+    spd = (base["mean"] / stats["mean"]) if (base.get("mean") and stats["mean"] > 0) else None
 
     # Validation
     vpass = vmax = vrmax = None
@@ -781,11 +745,7 @@ def bench_conv2d(
                 _ = _naive(inp_t, w_t, stride=stride, padding=pad)
                 mm.append((time.perf_counter() - t0) * 1000.0)
             uhop_mean = float(statistics.mean(mm))
-            uhop_spd = (
-                (base["mean"] / uhop_mean)
-                if (base.get("mean") and uhop_mean and uhop_mean > 0)
-                else None
-            )
+            uhop_spd = (base["mean"] / uhop_mean) if (base.get("mean") and uhop_mean and uhop_mean > 0) else None
         except Exception:
             uhop_mean = None
             uhop_spd = None
@@ -834,8 +794,11 @@ def bench_conv2d_relu(
 
     import torch
 
-    from uhop.backends.opencl_backend import (opencl_conv2d,
-                                              opencl_conv2d_relu, opencl_relu)
+    from uhop.backends.opencl_backend import (
+        opencl_conv2d,
+        opencl_conv2d_relu,
+        opencl_relu,
+    )
 
     outH = (H + 2 * pad - R) // stride + 1
     outW = (W + 2 * pad - S) // stride + 1
@@ -878,11 +841,7 @@ def bench_conv2d_relu(
         "std": float(statistics.stdev(sep_ts)) if len(sep_ts) > 1 else 0.0,
     }
 
-    spd = (
-        (stats_s["mean"] / stats_f["mean"])
-        if (stats_s["mean"] > 0 and stats_f["mean"] > 0)
-        else None
-    )
+    spd = (stats_s["mean"] / stats_f["mean"]) if (stats_s["mean"] > 0 and stats_f["mean"] > 0) else None
 
     # Validation vs base ops (torch conv2d then relu)
     vpass = vmax = vrmax = None
@@ -890,9 +849,7 @@ def bench_conv2d_relu(
         inp_t = torch.from_numpy(x)
         w_t = torch.from_numpy(w)
         ref = (
-            torch.nn.functional.relu(
-                torch.nn.functional.conv2d(inp_t, w_t, stride=stride, padding=pad)
-            )
+            torch.nn.functional.relu(torch.nn.functional.conv2d(inp_t, w_t, stride=stride, padding=pad))
             .numpy()
             .astype(np.float32)
         )
@@ -954,17 +911,13 @@ def bench_conv2d_input_grad(
 
     # Warmup
     for _ in range(max(0, warmup)):
-        _ = opencl_conv2d_backward_input(
-            (B, C, H, W), w, grad_out, stride=stride, padding=pad
-        )
+        _ = opencl_conv2d_backward_input((B, C, H, W), w, grad_out, stride=stride, padding=pad)
 
     # Measure host time (backend handles device profiling internally where applicable)
     ts = []
     for _ in range(max(1, iters)):
         t0 = time.perf_counter()
-        gi = opencl_conv2d_backward_input(
-            (B, C, H, W), w, grad_out, stride=stride, padding=pad
-        )
+        gi = opencl_conv2d_backward_input((B, C, H, W), w, grad_out, stride=stride, padding=pad)
         ts.append((time.perf_counter() - t0) * 1000.0)
 
     stats = {
@@ -988,11 +941,7 @@ def bench_conv2d_input_grad(
         return xt.grad
 
     base = _measure_host_callable_ms(baseline, warmup=1, iters=max(1, iters))
-    spd = (
-        (base["mean"] / stats["mean"])
-        if (base.get("mean") and stats["mean"] > 0)
-        else None
-    )
+    spd = (base["mean"] / stats["mean"]) if (base.get("mean") and stats["mean"] > 0) else None
 
     vpass = vmax = vrmax = None
     if validate:
@@ -1054,17 +1003,13 @@ def bench_conv2d_weight_grad(
 
     # Warmup
     for _ in range(max(0, warmup)):
-        _ = opencl_conv2d_backward_weight(
-            x, grad_out, w_shape, stride=stride, padding=pad
-        )
+        _ = opencl_conv2d_backward_weight(x, grad_out, w_shape, stride=stride, padding=pad)
 
     # Measure host time
     ts = []
     for _ in range(max(1, iters)):
         t0 = time.perf_counter()
-        gw = opencl_conv2d_backward_weight(
-            x, grad_out, w_shape, stride=stride, padding=pad
-        )
+        gw = opencl_conv2d_backward_weight(x, grad_out, w_shape, stride=stride, padding=pad)
         ts.append((time.perf_counter() - t0) * 1000.0)
 
     stats = {
@@ -1088,11 +1033,7 @@ def bench_conv2d_weight_grad(
         return wt.grad
 
     base = _measure_host_callable_ms(baseline, warmup=1, iters=max(1, iters))
-    spd = (
-        (base["mean"] / stats["mean"])
-        if (base.get("mean") and stats["mean"] > 0)
-        else None
-    )
+    spd = (base["mean"] / stats["mean"]) if (base.get("mean") and stats["mean"] > 0) else None
 
     vpass = vmax = vrmax = None
     if validate:
@@ -1147,13 +1088,9 @@ def bench_softmax(
 
     def launch():
         if log:
-            return prg.logsoftmax_kernel(
-                q, gsz, None, x_buf, y_buf, np.int32(batch), np.int32(classes)
-            )
+            return prg.logsoftmax_kernel(q, gsz, None, x_buf, y_buf, np.int32(batch), np.int32(classes))
         else:
-            return prg.softmax_kernel(
-                q, gsz, None, x_buf, y_buf, np.int32(batch), np.int32(classes)
-            )
+            return prg.softmax_kernel(q, gsz, None, x_buf, y_buf, np.int32(batch), np.int32(classes))
 
     for _ in range(warmup):
         launch().wait()
@@ -1181,11 +1118,7 @@ def bench_softmax(
             _ = ex / np.sum(ex, axis=1, keepdims=True)
 
     base = _measure_host_callable_ms(baseline, warmup=1, iters=max(1, iters))
-    spd = (
-        (base["mean"] / stats["mean"])
-        if (base.get("mean") and stats["mean"] > 0)
-        else None
-    )
+    spd = (base["mean"] / stats["mean"]) if (base.get("mean") and stats["mean"] > 0) else None
     # Validation
     vpass = vmax = vrmax = None
     if validate:
@@ -1315,9 +1248,7 @@ def bench_pool2d(
 
     def baseline():
         if op == "maxpool2d":
-            torch.nn.functional.max_pool2d(
-                inp_t, kernel_size=k, stride=stride, padding=pad
-            )
+            torch.nn.functional.max_pool2d(inp_t, kernel_size=k, stride=stride, padding=pad)
         else:
             torch.nn.functional.avg_pool2d(
                 inp_t,
@@ -1329,11 +1260,7 @@ def bench_pool2d(
             )
 
     base = _measure_host_callable_ms(baseline, warmup=1, iters=max(1, iters))
-    spd = (
-        (base["mean"] / stats["mean"])
-        if (base.get("mean") and stats["mean"] > 0)
-        else None
-    )
+    spd = (base["mean"] / stats["mean"]) if (base.get("mean") and stats["mean"] > 0) else None
 
     # Validation
     vpass = vmax = vrmax = None
@@ -1341,9 +1268,7 @@ def bench_pool2d(
         out_host = np.empty_like(out)
         cl.enqueue_copy(q, out_host, out_buf).wait()
         if op == "maxpool2d":
-            ref = torch.nn.functional.max_pool2d(
-                inp_t, kernel_size=k, stride=stride, padding=pad
-            )
+            ref = torch.nn.functional.max_pool2d(inp_t, kernel_size=k, stride=stride, padding=pad)
         else:
             ref = torch.nn.functional.avg_pool2d(
                 inp_t,
@@ -1449,16 +1374,10 @@ def bench_depthwise_conv2d(
     b_t = torch.from_numpy(bias)
 
     def baseline():
-        torch.nn.functional.conv2d(
-            inp_t, w_t, b_t, stride=stride, padding=pad, groups=C
-        )
+        torch.nn.functional.conv2d(inp_t, w_t, b_t, stride=stride, padding=pad, groups=C)
 
     base = _measure_host_callable_ms(baseline, warmup=1, iters=max(1, iters))
-    spd = (
-        (base["mean"] / stats["mean"])
-        if (base.get("mean") and stats["mean"] > 0)
-        else None
-    )
+    spd = (base["mean"] / stats["mean"]) if (base.get("mean") and stats["mean"] > 0) else None
 
     # Perf metrics
     secs = stats["mean"] * 1e-3
@@ -1473,11 +1392,7 @@ def bench_depthwise_conv2d(
         out_host = np.empty_like(out)
         cl.enqueue_copy(q, out_host, out_buf).wait()
         ref = (
-            torch.nn.functional.conv2d(
-                inp_t, w_t, b_t, stride=stride, padding=pad, groups=C
-            )
-            .numpy()
-            .astype(np.float32)
+            torch.nn.functional.conv2d(inp_t, w_t, b_t, stride=stride, padding=pad, groups=C).numpy().astype(np.float32)
         )
         diff = np.abs(out_host - ref)
         vmax = float(np.max(diff))
@@ -1582,11 +1497,7 @@ def bench_groupnorm(
         _ = m(X_t)
 
     base = _measure_host_callable_ms(baseline, warmup=1, iters=max(1, iters))
-    spd = (
-        (base["mean"] / stats["mean"])
-        if (base.get("mean") and stats["mean"] > 0)
-        else None
-    )
+    spd = (base["mean"] / stats["mean"]) if (base.get("mean") and stats["mean"] > 0) else None
 
     # Memory bandwidth proxy (read+write)
     secs = stats["mean"] * 1e-3
@@ -1685,9 +1596,7 @@ def main():
         default=1 << 20,
         help="Vector length for elementwise/reduce ops",
     )
-    parser.add_argument(
-        "--matmul-shape", type=str, default="512,512,512", help="N,M,K for matmul"
-    )
+    parser.add_argument("--matmul-shape", type=str, default="512,512,512", help="N,M,K for matmul")
     parser.add_argument(
         "--matmul-kernel",
         type=str,
@@ -1737,9 +1646,7 @@ def main():
         default=8,
         help="Number of groups for group_norm",
     )
-    parser.add_argument(
-        "--groupnorm-eps", type=float, default=1e-5, help="Epsilon for group_norm"
-    )
+    parser.add_argument("--groupnorm-eps", type=float, default=1e-5, help="Epsilon for group_norm")
     parser.add_argument(
         "--validate",
         action="store_true",
@@ -1768,9 +1675,7 @@ def main():
     # Parse shapes
     N = int(args.size)
     Nmm, Mmm, Kmm = [int(x) for x in args.matmul_shape.split(",")]
-    Bc, Cc, Hc, Wc, Kc, Rc, Sc, stridec, padc = [
-        int(x) for x in args.conv_shape.split(",")
-    ]
+    Bc, Cc, Hc, Wc, Kc, Rc, Sc, stridec, padc = [int(x) for x in args.conv_shape.split(",")]
     Sb, Cb = [int(x) for x in args.softmax_shape.split(",")]
     Bp, Cp, Hp, Wp, kp, sp, pp = [int(x) for x in args.pool_shape.split(",")]
     Bd, Cd, Hd, Wd, KHd, KWd, sd, pd = [int(x) for x in args.depthwise_shape.split(",")]
@@ -2038,11 +1943,7 @@ def main():
     print("\nOpenCL Benchmarks Summary:")
     for r in results:
         spd = f" x{(r.speedup_vs_baseline):.2f}" if r.speedup_vs_baseline else ""
-        base = (
-            f", baseline={r.baseline_mean_ms:.3f} ms"
-            if r.baseline_mean_ms is not None
-            else ""
-        )
+        base = f", baseline={r.baseline_mean_ms:.3f} ms" if r.baseline_mean_ms is not None else ""
         perf = ""
         if r.gflops is not None:
             perf += f", {r.gflops:.1f} GFLOPS"
@@ -2051,9 +1952,7 @@ def main():
         val = ""
         if r.validated is not None:
             status = "PASS" if r.validated else "FAIL"
-            val = (
-                f", validate={status} (max|rel={r.max_abs_err:.2e}|{r.max_rel_err:.2e})"
-            )
+            val = f", validate={status} (max|rel={r.max_abs_err:.2e}|{r.max_rel_err:.2e})"
         uh = ""
         if r.uhop_mean_ms is not None:
             uh = f", uhop={r.uhop_mean_ms:.3f} ms"
@@ -2076,9 +1975,7 @@ def main():
             spd = row["speedup"] or 0.0
             v = row["validated"]
             val = "PASS" if v else ("FAIL" if v is not None else "-")
-            print(
-                f"{str(shp):>40s} | {fused_ms:10.3f} | {sep_ms:13.3f} | x{spd:5.2f} | {val:>4s}"
-            )
+            print(f"{str(shp):>40s} | {fused_ms:10.3f} | {sep_ms:13.3f} | x{spd:5.2f} | {val:>4s}")
 
     # Output JSON
     if args.output:

@@ -83,9 +83,7 @@ def _cuda_dtype(dtype: str) -> str:
     return "float"
 
 
-def autotune_elementwise(
-    op_name: str, size: int, dtype: str = "float32", device: str = "cuda"
-):
+def autotune_elementwise(op_name: str, size: int, dtype: str = "float32", device: str = "cuda"):
     """
     Autotune elementwise op 'op_name' for a single flat size.
     Returns cached best config or runs tuning and caches the result.
@@ -134,9 +132,7 @@ def autotune_elementwise(
     mapping_for_op = backend["map"]
     filename = mapping_for_op.get(op_name)
     if filename is None:
-        raise ValueError(
-            f"No kernel template mapped for op {op_name} on backend {device}"
-        )
+        raise ValueError(f"No kernel template mapped for op {op_name} on backend {device}")
 
     template_path = templates_dir / filename
     if not template_path.exists():
@@ -191,33 +187,23 @@ def autotune_elementwise(
             if device == "cuda":
                 kernel = cupy_wrapper.CupyKernel(source, "elem_op")
                 args = (da, db, dout, size)
-                latency = cupy_wrapper.time_kernel_run(
-                    kernel, (grid, 1, 1), (threads, 1, 1), args, warmups=2, runs=6
-                )
+                latency = cupy_wrapper.time_kernel_run(kernel, (grid, 1, 1), (threads, 1, 1), args, warmups=2, runs=6)
             elif device == "opencl":
                 # build OpenCL kernel and time via profiling
                 kernel = opencl_wrapper.OpenCLKernel(source, "elem_op")
                 cl = opencl_wrapper.cl
                 mf = cl.mem_flags
-                da_buf = cl.Buffer(
-                    kernel.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=a
-                )
-                db_buf = cl.Buffer(
-                    kernel.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=b
-                )
+                da_buf = cl.Buffer(kernel.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=a)
+                db_buf = cl.Buffer(kernel.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=b)
                 dout_buf = cl.Buffer(kernel.ctx, mf.WRITE_ONLY, a.nbytes)
                 global_size = (int(grid * threads),)
                 local_size = (int(threads),)
                 args = (da_buf, db_buf, dout_buf, np.uint64(size))
-                latency = opencl_wrapper.time_kernel_run(
-                    kernel, global_size, local_size, args, warmups=2, runs=6
-                )
+                latency = opencl_wrapper.time_kernel_run(kernel, global_size, local_size, args, warmups=2, runs=6)
             elif device == "hip":
                 kernel = hip_wrapper.HipKernel(source, "elem_op")
                 args = (da, db, dout, size)
-                latency = hip_wrapper.time_kernel_run(
-                    kernel, (grid, 1, 1), (threads, 1, 1), args, warmups=2, runs=6
-                )
+                latency = hip_wrapper.time_kernel_run(kernel, (grid, 1, 1), (threads, 1, 1), args, warmups=2, runs=6)
             elif device == "metal":
                 # just attempt compilation to ensure template is valid; runtime not measured
                 kernel = metal_wrapper.MetalKernel(source, "elem_op")
@@ -238,14 +224,40 @@ def autotune_elementwise(
             }
 
     if best["latency_s"] == float("inf"):
-        raise RuntimeError("No candidate kernel successfully compiled and timed.")
+        # Fallback: if CUDA backend present but NVRTC/NVCC unavailable (RawModule fails),
+        # provide a baseline implementation timed via cupy elementwise add to avoid hard failure.
+        if device == "cuda" and cp is not None:
+            try:
+                import time
+
+                da = cp.asarray(a)
+                db = cp.asarray(b)
+                start = time.perf_counter()
+                _ = da + db if op_name == "add" else da * db
+                cp.cuda.get_current_stream().synchronize()
+                end = time.perf_counter()
+                best = {
+                    "latency_s": end - start,
+                    "block": 0,
+                    "grid": 0,
+                    "dtype": dtype,
+                    "kernel_source_context": {
+                        "OP_EXPR": "a[i] + b[i]" if op_name == "add" else "a[i] * b[i]",
+                        "KERNEL_NAME": "elem_op_fallback",
+                        "DTYPE": _cuda_dtype(dtype),
+                    },
+                    "backend": device,
+                    "fallback": True,
+                }
+            except Exception:
+                raise RuntimeError("No candidate kernel successfully compiled and timed.")
+        else:
+            raise RuntimeError("No candidate kernel successfully compiled and timed.")
 
     _ensure_cache_dir()
     _save_cache(device, op_name, best)
     return best
 
 
-def get_cached_or_tune(
-    op_name: str, size: int, dtype: str = "float32", device: str = "cuda"
-):
+def get_cached_or_tune(op_name: str, size: int, dtype: str = "float32", device: str = "cuda"):
     return autotune_elementwise(op_name, size=size, dtype=dtype, device=device)

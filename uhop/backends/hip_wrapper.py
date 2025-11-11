@@ -14,9 +14,7 @@ except Exception:
 
 def ensure_hip():
     if cp is None:
-        raise RuntimeError(
-            "HIP support requires cupy built for ROCm (cupy-rocm). Install a ROCm-enabled cupy."
-        )
+        raise RuntimeError("HIP support requires cupy built for ROCm (cupy-rocm). Install a ROCm-enabled cupy.")
 
 
 class HipKernel:
@@ -24,9 +22,7 @@ class HipKernel:
         # Assuming cupy-rocm's RawModule can compile HIP code similarly
         ensure_hip()
         # RawModule may accept hipcc; rely on cupy for compilation
-        self._module = cp.RawModule(
-            code=source, backend="nvcc"
-        )  # cupy ROCm may accept this; if not, adjust
+        self._module = cp.RawModule(code=source, backend="nvcc")  # cupy ROCm may accept this; if not, adjust
         self._fn = self._module.get_function(kernel_name)
 
     def launch(self, grid, block, args, stream=None):

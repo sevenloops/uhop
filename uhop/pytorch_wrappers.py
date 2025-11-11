@@ -10,6 +10,7 @@ UHOPConv2DFunction.backward:
   - For Phase1 we use a CPU torch fallback to compute gradients (correctness-first).
   - Later we will implement backend native backward kernels (OpenCL/HIP/Triton).
 """
+
 import torch
 from torch.autograd import Function
 
@@ -41,10 +42,7 @@ class UHOPConv2DFunction(Function):
                             for ci in range(Cin):
                                 for ky in range(KH):
                                     for kx in range(KW):
-                                        s += (
-                                            inp_np[n, ci, y + ky, x + kx]
-                                            * w_np[co, ci, ky, kx]
-                                        )
+                                        s += inp_np[n, ci, y + ky, x + kx] * w_np[co, ci, ky, kx]
                             out[n, co, y, x] = s
             out_t = torch.from_numpy(out).to(input_t.device)
         ctx.save_for_backward(input_t, weight_t)

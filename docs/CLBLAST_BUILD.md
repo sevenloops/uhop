@@ -6,9 +6,9 @@ This guide shows how to build and install CLBlast and point UHOP to the built li
 
 ## TL;DR
 
-1) Build or install CLBlast for your platform
-2) Set the environment variable `CLBLAST_LIBRARY` to the absolute path of the shared library (DLL/SO/Dylib)
-3) Run benchmarks with:
+1. Build or install CLBlast for your platform
+2. Set the environment variable `CLBLAST_LIBRARY` to the absolute path of the shared library (DLL/SO/Dylib)
+3. Run benchmarks with:
 
 ```bash
 # Prefer CLBlast for matmul
@@ -87,5 +87,5 @@ If `False`, double-check your `CLBLAST_LIBRARY` path and OpenCL runtime installa
   - Ensure you are using a 64-bit Python and 64-bit CLBlast build
   - Update your GPU's OpenCL driver/ICD (AMD/NVIDIA/Intel)
   - Confirm the queue/buffers are from the same OpenCL context (UHOP handles this internally)
-  - UHOP vends a robust ctypes wrapper (WinDLL on Windows, non-NULL cl_event*) but some driver stacks still fault; if it persists, set `UHOP_OPENCL_CONV_IMPL=tiled` and/or `UHOP_OPENCL_MATMUL_IMPL=tiled` to use stable tiled kernels
+  - UHOP vends a robust ctypes wrapper (WinDLL on Windows, non-NULL cl_event\*) but some driver stacks still fault; if it persists, set `UHOP_OPENCL_CONV_IMPL=tiled` and/or `UHOP_OPENCL_MATMUL_IMPL=tiled` to use stable tiled kernels
   - Optionally try CLBlast installed via a different channel (vcpkg vs conda-forge) to vary the build toolchain

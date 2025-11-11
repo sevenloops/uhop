@@ -6,17 +6,14 @@ import click
 import numpy as np
 from rich.console import Console
 
-from .backends import (is_opencl_available, is_torch_available,
-                       is_triton_available)
+from .backends import is_opencl_available, is_torch_available, is_triton_available
 from .hardware import detect_hardware
 
 # Conditional imports for OpenCL functions
 try:
     if is_opencl_available():
-        from .backends.opencl_backend import \
-            opencl_conv2d_relu as _ocl_conv2d_relu
-        from .backends.opencl_backend import \
-            set_opencl_device as _set_opencl_device
+        from .backends.opencl_backend import opencl_conv2d_relu as _ocl_conv2d_relu
+        from .backends.opencl_backend import set_opencl_device as _set_opencl_device
     else:
         _set_opencl_device = None
         _ocl_conv2d_relu = None
@@ -26,6 +23,7 @@ except ImportError:
 import json as _json
 from datetime import datetime as _dt
 
+from . import config as _cfg
 from . import optimize
 from .ai_codegen import AICodegen
 from .cache import UhopCache as _UhopCache
@@ -47,25 +45,35 @@ def _hardware_summary() -> str:
 
 
 def _load_env():
-    # Load environment variables from a .env file if present
+    """Load environment variables from .env files unless gated off.
+
+    Respects optional UHOP_LOAD_DOTENV (default on). If set to 0/false, .env
+    loading is skipped for stricter/secure environments.
+    """
+    try:
+        from . import config as _cfg
+
+        gate = _cfg.get("UHOP_LOAD_DOTENV")
+        if gate is not None and gate is False:
+            return
+    except Exception:
+        pass
     root = Path(__file__).resolve().parents[1]  # repo root (uhop/)
-    candidates = [
-        Path.cwd() / ".env",
-        root / ".env",
-    ]
+    candidates = [Path.cwd() / ".env", root / ".env"]
     for p in candidates:
         try:
-            if p.exists():
-                for line in p.read_text().splitlines():
-                    s = line.strip()
-                    if not s or s.startswith("#"):
-                        continue
-                    if "=" in s:
-                        k, v = s.split("=", 1)
-                        k = k.strip()
-                        v = v.strip().strip('"').strip("'")
-                        if k and v and k not in os.environ:
-                            os.environ[k] = v
+            if not p.exists():
+                continue
+            for line in p.read_text().splitlines():
+                s = line.strip()
+                if not s or s.startswith("#"):
+                    continue
+                if "=" in s:
+                    k, v = s.split("=", 1)
+                    k = k.strip()
+                    v = v.strip().strip('"').strip("'")
+                    if k and v and k not in os.environ:
+                        os.environ[k] = v
         except Exception:
             continue
 
@@ -77,15 +85,46 @@ _load_env()
 @click.option(
     "--strict-validate",
     is_flag=True,
-    help=(
-        "Tighten tolerances and gate AI kernels with validation. "
-        "Equivalent to UHOP_STRICT_VALIDATE=1"
-    ),
+    help=("Tighten tolerances and gate AI kernels with validation. " "Equivalent to UHOP_STRICT_VALIDATE=1"),
 )
 def main(strict_validate: bool):
     """UHOP CLI — AI-Powered Universal Hardware Optimizer."""
     if strict_validate:
-        os.environ["UHOP_STRICT_VALIDATE"] = "1"
+        _cfg.set("UHOP_STRICT_VALIDATE", "1")
+
+
+@main.group()
+def config():
+    """Configuration inspection commands."""
+    pass
+
+
+@config.command("list")
+def config_list():
+    """List current UHOP configuration (env + defaults)."""
+    try:
+        from tabulate import tabulate as _tab
+    except Exception:
+        _tab = None
+    rows = []
+    for row in _cfg.describe():
+        rows.append(
+            [
+                row.get("category"),
+                row.get("name"),
+                row.get("default"),
+                row.get("current"),
+                ",".join(row.get("choices") or []) or "",
+            ]
+        )
+    headers = ["Category", "Name", "Default", "Current", "Choices"]
+    if _tab is not None:
+        console.print(_tab(rows, headers=headers, tablefmt="github"))
+    else:
+        # Fallback plain formatting
+        console.print(" | ".join(headers))
+        for r in rows:
+            console.print(" | ".join(str(x) for x in r))
 
 
 @main.command()
@@ -106,10 +145,7 @@ def info(as_json: bool, ocl_device: int | None):
         try:
             _set_opencl_device(ocl_device)
         except Exception as e:
-            console.print(
-                f"[yellow]Warning:[/yellow] could not set OpenCL device index "
-                f"{ocl_device}: {e}"
-            )
+            console.print(f"[yellow]Warning:[/yellow] could not set OpenCL device index " f"{ocl_device}: {e}")
 
     if not as_json:
         console.print("[bold cyan]UHOP Hardware Report[/bold cyan]")
@@ -123,13 +159,9 @@ def info(as_json: bool, ocl_device: int | None):
         try:
             import torch  # type: ignore
 
-            mps_avail = bool(
-                getattr(torch.backends, "mps", None)
-                and torch.backends.mps.is_available()
-            )
+            mps_avail = bool(getattr(torch.backends, "mps", None) and torch.backends.mps.is_available())
             try:
-                from .backends.torch_backend import \
-                    _torch_device_preference as _pref
+                from .backends.torch_backend import _torch_device_preference as _pref
 
                 dev = _pref()
                 torch_pref = getattr(dev, "type", None) if dev is not None else None
@@ -192,17 +224,13 @@ def info(as_json: bool, ocl_device: int | None):
         console.print(f"- CUDA available: {has_cuda}")
         # Apple Metal Performance Shaders (MPS)
         try:
-            mps_ok = bool(
-                getattr(torch.backends, "mps", None)
-                and torch.backends.mps.is_available()
-            )
+            mps_ok = bool(getattr(torch.backends, "mps", None) and torch.backends.mps.is_available())
         except Exception:
             mps_ok = False
         console.print(f"- MPS available: {mps_ok}")
         # UHOP's torch device preference (cuda > mps > cpu)
         try:
-            from .backends.torch_backend import \
-                _torch_device_preference as _pref
+            from .backends.torch_backend import _torch_device_preference as _pref
 
             dev = _pref()
             pref = getattr(dev, "type", None) if dev is not None else None
@@ -283,20 +311,13 @@ def info(as_json: bool, ocl_device: int | None):
         plats = cl.get_platforms()
         console.print(f"- platforms: {len(plats)}")
         for pi, p in enumerate(plats):
-            console.print(
-                f"  - [{pi}] {p.name} (vendor={p.vendor}, version={p.version})"
-            )
+            console.print(f"  - [{pi}] {p.name} (vendor={p.vendor}, version={p.version})")
             for di, d in enumerate(p.get_devices()):
                 try:
                     info1 = f"      * [{di}] {_dtype(d.type)} | name={d.name}"
                     info2 = f"vendor={d.vendor} | version={d.version}"
-                    info3 = (
-                        f"CUs={d.max_compute_units} | " f"maxWG={d.max_work_group_size}"
-                    )
-                    info4 = (
-                        f"global={_fmt_bytes(d.global_mem_size)} | "
-                        f"local={_fmt_bytes(d.local_mem_size)}"
-                    )
+                    info3 = f"CUs={d.max_compute_units} | " f"maxWG={d.max_work_group_size}"
+                    info4 = f"global={_fmt_bytes(d.global_mem_size)} | " f"local={_fmt_bytes(d.local_mem_size)}"
                     console.print(info1)
                     console.print(f"        {info2}")
                     console.print(f"        {info3}")
@@ -346,14 +367,10 @@ def demo(size: int, iters: int, ocl_device: int | None):
                 _set_opencl_device(ocl_device)
             else:
                 console.print(
-                    "[yellow]Warning:[/yellow] OpenCL not available, "
-                    f"cannot set device index {ocl_device}"
+                    "[yellow]Warning:[/yellow] OpenCL not available, " f"cannot set device index {ocl_device}"
                 )
         except Exception as e:
-            console.print(
-                "[yellow]Warning:[/yellow] could not set OpenCL device index "
-                f"{ocl_device}: {e}"
-            )
+            console.print("[yellow]Warning:[/yellow] could not set OpenCL device index " f"{ocl_device}: {e}")
     console.print(_hardware_summary())
 
     # Naive triple-loop baseline (slow, but shows UHOP acceleration clearly)
@@ -399,10 +416,7 @@ def demo(size: int, iters: int, ocl_device: int | None):
     if t_uhop < t_naive:
         console.print("[green]UHOP wins ✅[/green]")
     else:
-        console.print(
-            "[yellow]Baseline was faster in this config. Try larger size or "
-            "check GPU drivers.[/yellow]"
-        )
+        console.print("[yellow]Baseline was faster in this config. Try larger size or " "check GPU drivers.[/yellow]")
 
 
 @main.command(name="demo-conv2d-relu")
@@ -446,10 +460,7 @@ def demo_conv2d_relu(
         try:
             _set_opencl_device(ocl_device)
         except Exception as e:
-            console.print(
-                f"[yellow]Warning:[/yellow] could not set OpenCL device index "
-                f"{ocl_device}: {e}"
-            )
+            console.print(f"[yellow]Warning:[/yellow] could not set OpenCL device index " f"{ocl_device}: {e}")
     console.print(_hardware_summary())
 
     import numpy as np
@@ -527,10 +538,7 @@ def demo_conv2d_relu(
     if t_uhop < t_naive:
         console.print("[green]UHOP beats naive ✅[/green]")
     else:
-        console.print(
-            "[yellow]Naive was faster at this size. Try larger H/W or "
-            "channels.[/yellow]"
-        )
+        console.print("[yellow]Naive was faster at this size. Try larger H/W or " "channels.[/yellow]")
 
 
 @main.command(name="ai-generate")
@@ -590,9 +598,7 @@ def ai_generate(
     Example:
       python -m uhop.cli ai-generate matmul --target opencl --validate
     """
-    console.print(
-        f"[bold cyan]AI Codegen[/bold cyan] — op={operation}, target={target}"
-    )
+    console.print(f"[bold cyan]AI Codegen[/bold cyan] — op={operation}, target={target}")
     gen = AICodegen(model=model) if model else AICodegen()
     if samples <= 1:
         try:
@@ -629,9 +635,7 @@ def ai_generate(
         try:
             import importlib.util
 
-            spec = importlib.util.spec_from_file_location(
-                "uhop.generated_kernels.ai_generated", str(path)
-            )
+            spec = importlib.util.spec_from_file_location("uhop.generated_kernels.ai_generated", str(path))
             mod = importlib.util.module_from_spec(spec)
             assert spec and spec.loader
             spec.loader.exec_module(mod)  # type: ignore
@@ -694,12 +698,8 @@ def ai_generate(
                         assert K == K2
                         C = np.empty((M, N), dtype=np.float32)
                         mf = cl.mem_flags
-                        a_buf = cl.Buffer(
-                            ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=A
-                        )
-                        b_buf = cl.Buffer(
-                            ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=B
-                        )
+                        a_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=A)
+                        b_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=B)
                         c_buf = cl.Buffer(ctx, mf.WRITE_ONLY, C.nbytes)
                         kn = cl.Kernel(prg, f"generated_{operation}")
                         kn.set_args(
@@ -722,9 +722,7 @@ def ai_generate(
                         err = float(np.max(np.abs(C - ref)))
                         dt = float(perf_counter() - t0)
                         results.append((pth, err, dt))
-                        msg = (
-                            f"Candidate {pth.name}: Linf={err:.3e}, " f"time={dt:.6f}s"
-                        )
+                        msg = f"Candidate {pth.name}: Linf={err:.3e}, " f"time={dt:.6f}s"
                         console.print(msg)
                     # Pick best by time with acceptable error
                     ok = [r for r in results if r[1] < 1e-3]
@@ -733,8 +731,7 @@ def ai_generate(
                     else:
                         best = min(results, key=lambda r: r[1])
                     console.print(
-                        f"[bold]Selected best:[/bold] {best[0].name} "
-                        f"(Linf={best[1]:.3e}, time={best[2]:.6f}s)"
+                        f"[bold]Selected best:[/bold] {best[0].name} " f"(Linf={best[1]:.3e}, time={best[2]:.6f}s)"
                     )
                     # Write manifest
                     ai_dir = Path(paths[0]).parent
@@ -754,9 +751,7 @@ def ai_generate(
                         ],
                         "selected": str(best[0]),
                     }
-                    (ai_dir / f"ai_{operation}_manifest.json").write_text(
-                        _json.dumps(manifest, indent=2)
-                    )
+                    (ai_dir / f"ai_{operation}_manifest.json").write_text(_json.dumps(manifest, indent=2))
                     # Auto-cache best kernel for optimizer (matmul only)
                     try:
                         cache = _UhopCache()
@@ -771,14 +766,9 @@ def ai_generate(
                                 "hardware": _detect().__dict__,
                             },
                         )
-                        console.print(
-                            "[green]Cached best kernel for optimizer "
-                            "(ai_opencl/matmul).[/green]"
-                        )
+                        console.print("[green]Cached best kernel for optimizer " "(ai_opencl/matmul).[/green]")
                     except Exception as e:
-                        console.print(
-                            "[yellow]Warn:[/yellow] cache set failed: " f"{e}"
-                        )
+                        console.print("[yellow]Warn:[/yellow] cache set failed: " f"{e}")
                 except Exception as e:
                     console.print(f"[red]OpenCL smoke test failed:[/red] {e}")
         elif operation.lower() == "relu" and target.lower() == "opencl":
@@ -812,14 +802,11 @@ def ai_generate(
                     err = float(np.max(np.abs(Y - ref)))
                     dt = float(perf_counter() - t0)
                     results.append((pth, err, dt))
-                    console.print(
-                        f"Candidate {pth.name}: Linf={err:.3e}, time={dt:.6f}s"
-                    )
+                    console.print(f"Candidate {pth.name}: Linf={err:.3e}, time={dt:.6f}s")
                 ok = [r for r in results if r[1] < 1e-6]
                 best = min(ok or results, key=lambda r: (r[2], r[1]))
                 console.print(
-                    f"[bold]Selected best:[/bold] {best[0].name} "
-                    f"(Linf={best[1]:.3e}, time={best[2]:.6f}s)"
+                    f"[bold]Selected best:[/bold] {best[0].name} " f"(Linf={best[1]:.3e}, time={best[2]:.6f}s)"
                 )
                 ai_dir = Path(paths[0]).parent
                 manifest = {
@@ -838,9 +825,7 @@ def ai_generate(
                     ],
                     "selected": str(best[0]),
                 }
-                (ai_dir / f"ai_{operation}_manifest.json").write_text(
-                    _json.dumps(manifest, indent=2)
-                )
+                (ai_dir / f"ai_{operation}_manifest.json").write_text(_json.dumps(manifest, indent=2))
                 # Auto-cache best kernel for optimizer
                 try:
                     cache = _UhopCache()
@@ -855,10 +840,7 @@ def ai_generate(
                             "hardware": _detect().__dict__,
                         },
                     )
-                    console.print(
-                        "[green]Cached best kernel for optimizer "
-                        "(ai_opencl/relu).[/green]"
-                    )
+                    console.print("[green]Cached best kernel for optimizer " "(ai_opencl/relu).[/green]")
                 except Exception as e:
                     console.print("[yellow]Warn:[/yellow] cache set failed: " f"{e}")
             except Exception as e:
@@ -903,10 +885,7 @@ def ai_generate(
                                                 iy = y * stride - pad + ky
                                                 ix = x * stride - pad + kx
                                                 if 0 <= iy < H and 0 <= ix < W:
-                                                    s += (
-                                                        X[n, ci, iy, ix]
-                                                        * Wt[co, ci, ky, kx]
-                                                    )
+                                                    s += X[n, ci, iy, ix] * Wt[co, ci, ky, kx]
                                     ref[n, co, y, x] = s
                 results = []
                 for pth in paths:
@@ -956,14 +935,11 @@ def ai_generate(
                     err = float(np.max(np.abs(Y - ref)))
                     dt = float(perf_counter() - t0)
                     results.append((pth, err, dt))
-                    console.print(
-                        f"Candidate {pth.name}: Linf={err:.3e}, time={dt:.6f}s"
-                    )
+                    console.print(f"Candidate {pth.name}: Linf={err:.3e}, time={dt:.6f}s")
                 ok = [r for r in results if r[1] < 1e-2]
                 best = min(ok or results, key=lambda r: (r[2], r[1]))
                 console.print(
-                    f"[bold]Selected best:[/bold] {best[0].name} "
-                    f"(Linf={best[1]:.3e}, time={best[2]:.6f}s)"
+                    f"[bold]Selected best:[/bold] {best[0].name} " f"(Linf={best[1]:.3e}, time={best[2]:.6f}s)"
                 )
                 ai_dir = Path(paths[0]).parent
                 manifest = {
@@ -982,9 +958,7 @@ def ai_generate(
                     ],
                     "selected": str(best[0]),
                 }
-                (ai_dir / f"ai_{operation}_manifest.json").write_text(
-                    _json.dumps(manifest, indent=2)
-                )
+                (ai_dir / f"ai_{operation}_manifest.json").write_text(_json.dumps(manifest, indent=2))
                 # Auto-cache best kernel for optimizer
                 try:
                     cache = _UhopCache()
@@ -999,10 +973,7 @@ def ai_generate(
                             "hardware": _detect().__dict__,
                         },
                     )
-                    console.print(
-                        "[green]Cached best kernel for optimizer "
-                        "(ai_opencl/conv2d).[/green]"
-                    )
+                    console.print("[green]Cached best kernel for optimizer " "(ai_opencl/conv2d).[/green]")
                 except Exception as e:
                     console.print("[yellow]Warn:[/yellow] cache set failed: " f"{e}")
             except Exception as e:
@@ -1069,8 +1040,7 @@ def ai_generate_fused(
         import numpy as np
         import pyopencl as cl
 
-        from .backends.opencl_backend import \
-            opencl_conv2d_relu as fused_baseline
+        from .backends.opencl_backend import opencl_conv2d_relu as fused_baseline
 
         ctx, q = _ensure_opencl_context_for_validation()
         src = Path(path).read_text()
@@ -1146,9 +1116,7 @@ def ai_generate_fused(
                 "selected": str(path),
             },
         }
-        (ai_dir / "ai_conv2d_relu_manifest.json").write_text(
-            _json.dumps(manifest, indent=2)
-        )
+        (ai_dir / "ai_conv2d_relu_manifest.json").write_text(_json.dumps(manifest, indent=2))
         if err < 1e-2:
             try:
                 cache = _UhopCache()
@@ -1163,14 +1131,9 @@ def ai_generate_fused(
                         "hardware": _detect().__dict__,
                     },
                 )
-                console.print(
-                    "[green]Cached AI fused kernel for optimizer "
-                    "(ai_opencl/conv2d_relu).[/green]"
-                )
+                console.print("[green]Cached AI fused kernel for optimizer " "(ai_opencl/conv2d_relu).[/green]")
             except Exception as e:
-                console.print(
-                    f"[yellow]Warn:[/yellow] could not cache fused kernel: {e}"
-                )
+                console.print(f"[yellow]Warn:[/yellow] could not cache fused kernel: {e}")
     except Exception as e:
         console.print(f"[red]Fused build/benchmark failed:[/red] {e}")
 
@@ -1284,9 +1247,7 @@ def web_bridge(port: int):
     except Exception as e:
         console.print(f"[red]Failed to import web bridge:[/red] {e}")
         return
-    console.print(
-        f"[green]Starting local web bridge on http://127.0.0.1:{port}[/green]"
-    )
+    console.print(f"[green]Starting local web bridge on http://127.0.0.1:{port}[/green]")
     run_web_bridge(port)
 
 
@@ -1310,6 +1271,300 @@ def web_api(host: str, port: int):
     _run(host, port)
 
 
+@main.group()
+def policy():
+    """Policy and decision introspection commands."""
+    pass
+
+
+@main.group(name="backends")
+def backends_group():
+    """Inspect registered backends and capabilities."""
+    pass
+
+
+@backends_group.command("list")
+def backends_list():
+    """List registered backends and availability."""
+    try:
+        from .backends.base import get_backend_manager
+        from .backends.registry import ensure_default_backends_registered
+    except Exception as e:
+        console.print(f"[red]Failed to import backend manager:[/red] {e}")
+        return
+    ensure_default_backends_registered()
+    mgr = get_backend_manager()
+    # Initialize and gather
+    try:
+        mgr.initialize_all()
+    except Exception:
+        pass
+    rows = []
+    for name, b in getattr(mgr, "_backends", {}).items():
+        cap = b.capabilities
+        rows.append(
+            [
+                name,
+                "yes" if cap.available else "no",
+                cap.device_count,
+                ", ".join(cap.device_names[:3]) + (" …" if len(cap.device_names) > 3 else ""),
+                ",".join(sorted([k for k, v in (cap.vendor_libs or {}).items() if v])) or "-",
+            ]
+        )
+    headers = ["Backend", "Available", "Devices", "Device Names", "Vendor Libs"]
+    try:
+        from tabulate import tabulate as _tab
+
+        console.print(_tab(rows, headers=headers, tablefmt="github"))
+    except Exception:
+        console.print(" | ".join(headers))
+        for r in rows:
+            console.print(" | ".join(str(x) for x in r))
+
+
+@backends_group.command("coverage")
+@click.option("--json", "as_json", is_flag=True, help="Emit machine-readable JSON.")
+def backends_coverage(as_json: bool):
+    """Show operator coverage across registered backends.
+
+    Displays per-backend supported op counts and an optional compact matrix.
+    """
+    try:
+        from .backends.base import get_backend_manager
+        from .backends.registry import ensure_default_backends_registered
+    except Exception as e:
+        console.print(f"[red]Failed to import backend manager/registry:[/red] {e}")
+        return
+    ensure_default_backends_registered()
+    mgr = get_backend_manager()
+    try:
+        mgr.initialize_all()
+    except Exception:
+        pass
+    # registry accessed indirectly during supported ops retrieval; explicit variable unused
+    backend_names = list(getattr(mgr, "_backends", {}).keys())
+    details = {}
+    for name, b in getattr(mgr, "_backends", {}).items():
+        try:
+            supported = b.get_supported_ops() if b.capabilities.available else []
+        except Exception:
+            supported = []
+        details[name] = {
+            "available": bool(b.capabilities.available),
+            "supported_ops": sorted(list(set(supported))),
+            "count": len(set(supported)),
+        }
+    # Build simple coverage matrix for ops that appear in any supported list
+    all_supported_ops = sorted({op for d in details.values() for op in d["supported_ops"]})
+    matrix = {}
+    for op in all_supported_ops:
+        matrix[op] = {bn: (op in details.get(bn, {}).get("supported_ops", [])) for bn in backend_names}
+    summary = {
+        "backends": details,
+        "totals": {bn: details[bn]["count"] for bn in backend_names},
+        "ops_considered": len(all_supported_ops),
+        "matrix": matrix,
+    }
+    if as_json:
+        console.print(_json.dumps(summary, indent=2))
+        return
+    # Pretty table view
+    try:
+        from tabulate import tabulate as _tab
+    except Exception:
+        _tab = None
+    rows = []
+    for bn in backend_names:
+        d = details.get(bn, {})
+        rows.append(
+            [
+                bn,
+                "yes" if d.get("available") else "no",
+                d.get("count", 0),
+                ", ".join(d.get("supported_ops", [])[:10]) + (" …" if len(d.get("supported_ops", [])) > 10 else ""),
+            ]
+        )
+    headers = ["Backend", "Available", "Supported Ops", "Ops (first 10)"]
+    if _tab is not None:
+        console.print(_tab(rows, headers=headers, tablefmt="github"))
+    else:
+        console.print(" | ".join(headers))
+        for r in rows:
+            console.print(" | ".join(str(x) for x in r))
+
+
+@policy.command("explain")
+@click.argument("operation")
+@click.option(
+    "--arg-shape", type=str, multiple=True, help="Synthetic arg shape(s) like 128x128 or 1x3x64x64 for probing."
+)
+@click.option("--dtype", type=str, default="float32", show_default=True, help="NumPy dtype for synthetic arrays.")
+@click.option("--json", "as_json", is_flag=True, help="Emit machine-readable JSON.")
+@click.option("--iters", type=int, default=1, show_default=True, help="Benchmark iterations per candidate (for stats).")
+@click.option("--warmup", type=int, default=0, show_default=True, help="Warmup runs per candidate (not counted).")
+@click.option(
+    "--stats", "collect_stats", is_flag=True, help="Collect and display full stats (mean/median/std/min/max)."
+)
+@click.option(
+    "--mode",
+    type=click.Choice(["order", "benchmark"], case_sensitive=False),
+    default="order",
+    show_default=True,
+    help="Selection mode for suggested backend.",
+)
+def policy_explain(
+    operation: str,
+    arg_shape: tuple[str, ...],
+    dtype: str,
+    as_json: bool,
+    iters: int,
+    warmup: int,
+    collect_stats: bool,
+    mode: str,
+):
+    """Explain backend selection order by probing candidates.
+
+    Provide one or two --arg-shape entries depending on the op:
+      matmul: two shapes (e.g. 128x256 256x64)
+      conv2d: two shapes (input N*C*H*W, weight Cout*Cin*KH*KW)
+      relu: one shape (e.g. 1024)
+
+    If no shapes passed, a default tiny synthetic shape is used.
+    """
+    import numpy as _np
+
+    from .backends.base import get_backend_manager
+    from .policy import BackendPolicy
+
+    mgr = get_backend_manager()
+    policy = BackendPolicy(mgr, _UhopCache())
+
+    def _parse_shape(s: str) -> tuple[int, ...]:
+        try:
+            return tuple(int(x) for x in s.lower().replace(" ", "").split("x") if x)
+        except Exception:
+            raise click.ClickException(f"Invalid shape format: {s}")
+
+    shapes = [_parse_shape(s) for s in arg_shape]
+    dt = _np.dtype(dtype)
+    args: list[_np.ndarray] = []
+    if operation == "matmul":
+        if len(shapes) != 2:
+            if len(shapes) == 0:
+                shapes = [(32, 32), (32, 32)]
+            else:
+                raise click.ClickException("matmul requires two --arg-shape entries")
+        A = _np.random.default_rng(0).random(shapes[0], dtype=dt)
+        B = _np.random.default_rng(1).random(shapes[1], dtype=dt)
+        if A.shape[1] != B.shape[0]:
+            raise click.ClickException("matmul shapes incompatible (A.cols != B.rows)")
+        args = [A, B]
+    elif operation == "conv2d":
+        if len(shapes) != 2:
+            if len(shapes) == 0:
+                shapes = [(1, 3, 32, 32), (4, 3, 3, 3)]
+            else:
+                raise click.ClickException("conv2d requires two --arg-shape entries")
+        X = _np.random.default_rng(0).random(shapes[0], dtype=dt)
+        W = _np.random.default_rng(1).random(shapes[1], dtype=dt)
+        if X.shape[1] != W.shape[1]:
+            raise click.ClickException("conv2d Cin mismatch between input and weight")
+        args = [X, W]
+    elif operation == "relu":
+        if len(shapes) not in (0, 1):
+            raise click.ClickException("relu accepts zero or one --arg-shape entry")
+        shape = shapes[0] if shapes else (1024,)
+        X = _np.random.default_rng(0).random(shape, dtype=dt)
+        args = [X]
+    else:
+        raise click.ClickException(f"Unsupported operation: {operation}")
+
+    explain = policy.explain(operation, args, {}, warmup=warmup, iterations=iters, collect_stats=collect_stats)
+    # Compute suggested backend depending on mode
+    suggested = None
+    if mode.lower() == "benchmark":
+        # Pick min median_ms among OK candidates
+        oks = [c for c in explain["candidates"] if c.get("ok") and c.get("latency_ms") is not None]
+        if oks:
+            best = min(oks, key=lambda c: c["latency_ms"])  # type: ignore
+            explain["selected"] = {"name": best["name"], "latency_ms": best["latency_ms"]}
+            explain["reason"] = "benchmark"
+    # Add cache context for this op/shape
+    from . import config as _cfg
+
+    def _sig_from_val(v):
+        try:
+            import torch  # type: ignore
+
+            if isinstance(v, torch.Tensor):
+                dev = getattr(v.device, "type", "cpu")
+                return (
+                    "torch",
+                    tuple(int(x) for x in v.shape),
+                    str(v.dtype).replace("torch.", ""),
+                    dev,
+                )
+        except Exception:
+            pass
+        try:
+            if isinstance(v, _np.ndarray):
+                return ("numpy", tuple(int(x) for x in v.shape), str(v.dtype))
+        except Exception:
+            pass
+        return (type(v).__name__,)
+
+    env_flag = _cfg.get("UHOP_CACHE_PER_SHAPE")
+    if isinstance(env_flag, bool):
+        per_shape = env_flag
+    else:
+        per_shape = str(env_flag).lower() in ("", "1", "true", "yes", "on") or env_flag is None
+    if per_shape:
+        parts = [str(_sig_from_val(args[0]))]
+        if len(args) > 1:
+            parts.append(str(_sig_from_val(args[1])))
+        cache_key = f"{operation}|" + ";".join(parts)
+    else:
+        cache_key = operation
+    c = _UhopCache()
+    rec = c.get(cache_key)
+    explain["cache"] = {"key": cache_key, "record": rec}
+    if as_json:
+        console.print(_json.dumps(explain, indent=2))
+        return
+    console.print(f"[bold cyan]Policy Explain[/bold cyan] op={operation}")
+    console.print(f"Preference order: {', '.join(explain['order'])}")
+    for cand in explain["candidates"]:
+        status = "OK" if cand["ok"] else f"skip ({cand.get('error','')})"
+        lat = f"{cand['latency_ms']:.3f} ms" if cand["latency_ms"] else "-"
+        console.print(f" - {cand['name']:<7} {status:<18} {lat}")
+        if collect_stats and cand.get("stats"):
+            st = cand["stats"]
+            console.print(
+                f"   stats: runs={st['runs']} median={st['median_ms']:.3f}ms mean={st['mean_ms']:.3f}ms std={st['std_ms']:.3f}ms min={st['min_ms']:.3f}ms max={st['max_ms']:.3f}ms"
+            )
+    sel = explain.get("selected")
+    if sel:
+        console.print(
+            f"Selected: [bold]{sel['name']}[/bold] ({sel['latency_ms']:.3f} ms) reason={explain.get('reason')}"
+        )
+    else:
+        console.print("[yellow]No backend selected (baseline likely).[/yellow]")
+    # Cache info
+    cache_info = explain.get("cache", {})
+    console.print(f"Cache key: {cache_info.get('key')}")
+    if cache_info.get("record"):
+        rec = cache_info["record"]
+        console.print(f"Cached backend: {rec.get('backend')} cached_at={rec.get('_cached_at')}")
+    else:
+        console.print("(no cache record for this shape)")
+    # Side-by-side comparison
+    cached_backend = cache_info.get("record", {}).get("backend") if cache_info.get("record") else None
+    suggested = sel["name"] if sel else None
+    if cached_backend or suggested:
+        disagree = cached_backend is not None and suggested is not None and cached_backend != suggested
+        console.print(f"Compare: cached={cached_backend} vs suggested={suggested} disagree={bool(disagree)}")
+
+
 @cache.command("invalidate")
 @click.option(
     "--all",
@@ -1322,10 +1577,7 @@ def web_api(host: str, port: int):
     "device_query",
     type=str,
     default=None,
-    help=(
-        "Substring filter to remove entries for a device (e.g. 'mps', 'cuda',"
-        " vendor name). Case-insensitive."
-    ),
+    help=("Substring filter to remove entries for a device (e.g. 'mps', 'cuda'," " vendor name). Case-insensitive."),
 )
 @click.option(
     "--backend",
@@ -1334,9 +1586,7 @@ def web_api(host: str, port: int):
     default=None,
     help="Remove entries for a specific backend (exact match).",
 )
-def cache_invalidate(
-    invalidate_all: bool, device_query: str | None, backend_name: str | None
-):
+def cache_invalidate(invalidate_all: bool, device_query: str | None, backend_name: str | None):
     """Invalidate cache entries by scope.
 
     Examples:
@@ -1406,12 +1656,7 @@ def autotune_clear_clblast_unstable(device_filter: str, exact: bool, dry_run: bo
             if len(parts) != 5:
                 continue
             backend, op, kernel, device_name, shape_key = parts
-            if not (
-                backend == "opencl"
-                and op == "clblast"
-                and kernel == "sgemm"
-                and shape_key == "device"
-            ):
+            if not (backend == "opencl" and op == "clblast" and kernel == "sgemm" and shape_key == "device"):
                 continue
             dn = (device_name or "").lower()
             if filt:
@@ -1430,15 +1675,11 @@ def autotune_clear_clblast_unstable(device_filter: str, exact: bool, dry_run: bo
         console.print("(no matching CLBlast unstable entries found)")
     else:
         if dry_run:
-            console.print(
-                f"[yellow]Dry-run:[/yellow] would clear {changed} entr(y/ies)."
-            )
+            console.print(f"[yellow]Dry-run:[/yellow] would clear {changed} entr(y/ies).")
         else:
             try:
                 path.write_text(_json.dumps(data, indent=2))
-                console.print(
-                    f"[green]Cleared CLBlast 'unstable' on {changed} entr(y/ies).[/green]"
-                )
+                console.print(f"[green]Cleared CLBlast 'unstable' on {changed} entr(y/ies).[/green]")
             except Exception as e:
                 console.print(f"[red]Failed to write autotune.json:[/red] {e}")
 

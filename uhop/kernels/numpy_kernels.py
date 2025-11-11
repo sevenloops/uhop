@@ -5,6 +5,7 @@ Simple NumPy reference kernels used for correctness tests and CPU fallback.
 Currently exposes:
 - numpy_matmul(a, b): matrix multiplication using NumPy (@)
 """
+
 from __future__ import annotations
 
 import numpy as np

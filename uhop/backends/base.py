@@ -90,7 +90,7 @@ class Backend(ABC):
         Returns:
             True if backend is available and usable, False otherwise.
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def check_vendor_libs(self) -> Dict[str, bool]:
@@ -100,7 +100,7 @@ class Backend(ABC):
         Returns:
             Dict mapping library name to availability status.
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def get_supported_ops(self) -> List[str]:
@@ -110,30 +110,24 @@ class Backend(ABC):
         Returns:
             List of operator names (e.g., ['matmul', 'conv2d', 'relu']).
         """
-        pass
+        raise NotImplementedError
 
     def register_manual_kernel(self, op_name: str, kernel_fn: Callable):
         """Register a manually-written kernel for an operator."""
         self._manual_kernels[op_name] = kernel_fn
         logger.debug(f"[{self.name}] Registered manual kernel for '{op_name}'")
 
-    def register_vendor_kernel(
-        self, op_name: str, kernel_fn: Callable, vendor_lib: str
-    ):
+    def register_vendor_kernel(self, op_name: str, kernel_fn: Callable, vendor_lib: str):
         """Register a vendor library kernel."""
         self._vendor_kernels[op_name] = kernel_fn
-        logger.debug(
-            f"[{self.name}] Registered vendor kernel for '{op_name}' via {vendor_lib}"
-        )
+        logger.debug(f"[{self.name}] Registered vendor kernel for '{op_name}' via {vendor_lib}")
 
     def register_autogen_kernel(self, op_name: str, kernel_fn: Callable):
         """Register an auto-generated kernel."""
         self._autogen_kernels[op_name] = kernel_fn
         logger.debug(f"[{self.name}] Registered autogen kernel for '{op_name}'")
 
-    def get_kernel(
-        self, op_name: str, prefer_source: Optional[KernelSource] = None
-    ) -> Optional[KernelInfo]:
+    def get_kernel(self, op_name: str, prefer_source: Optional[KernelSource] = None) -> Optional[KernelInfo]:
         """
         Get best available kernel for an operator using fallback logic.
 
@@ -227,21 +221,14 @@ class Backend(ABC):
         """
         kernel_info = self.get_kernel(op_name)
         if kernel_info is None or kernel_info.kernel_fn is None:
-            raise RuntimeError(
-                f"No kernel available for operator '{op_name}' on backend '{self.name}'"
-            )
+            raise RuntimeError(f"No kernel available for operator '{op_name}' on backend '{self.name}'")
 
         try:
             result = kernel_info.kernel_fn(*args, **kwargs)
-            logger.debug(
-                f"[{self.name}] Executed '{op_name}' via {kernel_info.source.value}"
-            )
+            logger.debug(f"[{self.name}] Executed '{op_name}' via {kernel_info.source.value}")
             return result
         except Exception as e:
-            logger.error(
-                f"[{self.name}] Failed to execute '{op_name}' "
-                f"via {kernel_info.source.value}: {e}"
-            )
+            logger.error(f"[{self.name}] Failed to execute '{op_name}' " f"via {kernel_info.source.value}: {e}")
             raise
 
     def benchmark_kernel(
@@ -351,11 +338,7 @@ class BackendManager:
         """List all available (initialized) backends."""
         if not self._initialized:
             self.initialize_all()
-        return [
-            name
-            for name, backend in self._backends.items()
-            if backend.capabilities.available
-        ]
+        return [name for name, backend in self._backends.items() if backend.capabilities.available]
 
     def get_best_backend_for_op(
         self, op_name: str, preferred_backends: Optional[List[str]] = None

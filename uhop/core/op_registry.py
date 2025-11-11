@@ -515,29 +515,15 @@ class OperatorRegistry:
 
     def list_by_category(self, category: OperatorCategory) -> List[str]:
         """List operators in a specific category."""
-        return sorted(
-            [name for name, spec in self._registry.items() if spec.category == category]
-        )
+        return sorted([name for name, spec in self._registry.items() if spec.category == category])
 
     def list_by_backend(self, backend: str) -> List[str]:
         """List operators supported by a backend."""
-        return sorted(
-            [
-                name
-                for name, spec in self._registry.items()
-                if spec.supports_backend(backend)
-            ]
-        )
+        return sorted([name for name, spec in self._registry.items() if spec.supports_backend(backend)])
 
     def list_by_importance(self, importance: str) -> List[str]:
         """List operators by importance level."""
-        return sorted(
-            [
-                name
-                for name, spec in self._registry.items()
-                if spec.importance == importance
-            ]
-        )
+        return sorted([name for name, spec in self._registry.items() if spec.importance == importance])
 
     def get_backends_for_op(self, op_name: str) -> List[str]:
         """Get prioritized list of backends for an operator."""
@@ -557,9 +543,7 @@ class OperatorRegistry:
 
         matrix = {}
         for name, spec in self._registry.items():
-            matrix[name] = {
-                backend: backend in spec.backends for backend in sorted(all_backends)
-            }
+            matrix[name] = {backend: backend in spec.backends for backend in sorted(all_backends)}
         return matrix
 
     def get_statistics(self) -> Dict[str, any]:

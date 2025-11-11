@@ -5,14 +5,16 @@ This uses the elementwise add kernel template and the autotuner to select a good
 block/grid, then compiles and runs it via PyOpenCL. The baseline is a plain
 Python loop adding two arrays element-wise.
 """
+
 import argparse
 import statistics
 import time
 from pathlib import Path
 
 import numpy as np
-from uhop.autotuner import get_cached_or_tune
 from jinja2 import Template
+
+from uhop.autotuner import get_cached_or_tune
 
 
 def render_opencl_add_kernel(context: dict) -> str:
@@ -61,6 +63,7 @@ def main():
     source = render_opencl_add_kernel(context)
 
     from uhop.backends import opencl_wrapper
+
     cl = opencl_wrapper.cl
     kernel = opencl_wrapper.OpenCLKernel(source, "elem_op")
 
@@ -72,7 +75,7 @@ def main():
 
     # Launch configuration from autotuner
     threads = int(best["block"])  # local_size
-    grid = int(best["grid"])      # number of workgroups along X
+    grid = int(best["grid"])  # number of workgroups along X
     global_size = (grid * threads,)
     local_size = (threads,)
 

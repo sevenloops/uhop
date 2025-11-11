@@ -3,9 +3,11 @@
 Demonstrate AMD GPU speedup using OpenCL by persisting device buffers across many matmul iterations.
 This shows the compute advantage when transfer overhead is amortized.
 """
-import time
 import statistics
+import time
+
 import numpy as np
+
 from uhop.backends.opencl_backend import _OPENCL_AVAILABLE
 
 if not _OPENCL_AVAILABLE:
@@ -85,6 +87,7 @@ def main():
     print(f"GPU OpenCL (persistent) median: {t_gpu:.4f} s")
     print(f"CPU NumPy               median: {t_cpu:.4f} s")
     print("Result check:", np.allclose(C, A @ B, atol=1e-3))
+
 
 if __name__ == "__main__":
     main()

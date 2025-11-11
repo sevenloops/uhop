@@ -11,9 +11,7 @@ except Exception:
 from uhop import autotuner
 from uhop.backends import cupy_wrapper
 
-pytestmark = pytest.mark.skipif(
-    cp is None, reason="cupy required to run CUDA autotuner tests"
-)
+pytestmark = pytest.mark.skipif(cp is None, reason="cupy required to run CUDA autotuner tests")
 
 
 def test_autotune_add_and_correctness(tmp_path):
@@ -23,9 +21,7 @@ def test_autotune_add_and_correctness(tmp_path):
         cache_file.unlink()
 
     size = 1_000_00  # 100k elements
-    best = autotuner.get_cached_or_tune(
-        "add", size=size, dtype="float32", device="cuda"
-    )
+    best = autotuner.get_cached_or_tune("add", size=size, dtype="float32", device="cuda")
     assert "latency_s" in best
     assert best["latency_s"] > 0
 

@@ -115,9 +115,7 @@ class HeavyOpsBenchmark:
         B = torch.randn(k, n, dtype=torch.float32)
 
         # PyTorch CPU baseline
-        baseline_time = self._measure_time(
-            lambda: torch.matmul(A.cpu(), B.cpu()), "cpu"
-        )
+        baseline_time = self._measure_time(lambda: torch.matmul(A.cpu(), B.cpu()), "cpu")
         baseline_mean = baseline_time["mean"]
 
         results = []
@@ -145,10 +143,8 @@ class HeavyOpsBenchmark:
                 A_dev = A.cpu()
                 B_dev = B.cpu()
 
-            # Benchmark
-            timing = self._measure_time(
-                lambda: kernel_info.kernel_fn(A_dev, B_dev), backend_name
-            )
+            # Benchmark (bind loop vars to avoid late-binding in lambdas)
+            timing = self._measure_time(lambda A=A_dev, B=B_dev, ki=kernel_info: ki.kernel_fn(A, B), backend_name)
 
             # Calculate FLOPS (2 * M * N * K operations)
             flops = 2 * m * n * k
@@ -200,9 +196,7 @@ class HeavyOpsBenchmark:
 
         # Prepare inputs
         input = torch.randn(batch, in_channels, height, width, dtype=torch.float32)
-        weight = torch.randn(
-            out_channels, in_channels, kernel_size, kernel_size, dtype=torch.float32
-        )
+        weight = torch.randn(out_channels, in_channels, kernel_size, kernel_size, dtype=torch.float32)
 
         # PyTorch CPU baseline
         baseline_time = self._measure_time(
@@ -235,7 +229,7 @@ class HeavyOpsBenchmark:
 
             # Benchmark
             timing = self._measure_time(
-                lambda: kernel_info.kernel_fn(input_dev, weight_dev, padding=1),
+                lambda X=input_dev, W=weight_dev, ki=kernel_info: ki.kernel_fn(X, W, padding=1),
                 backend_name,
             )
 
@@ -318,9 +312,7 @@ class HeavyOpsBenchmark:
                 x_dev = x.cpu()
 
             # Benchmark
-            timing = self._measure_time(
-                lambda: kernel_info.kernel_fn(x_dev), backend_name
-            )
+            timing = self._measure_time(lambda X=x_dev, ki=kernel_info: ki.kernel_fn(X), backend_name)
 
             result = BenchmarkResult(
                 op_name=op_name,
@@ -454,12 +446,8 @@ def main():
         type=str,
         help="Comma-separated list of backends to test (default: all available)",
     )
-    parser.add_argument(
-        "--warmup", type=int, default=3, help="Number of warmup iterations"
-    )
-    parser.add_argument(
-        "--iterations", type=int, default=10, help="Number of benchmark iterations"
-    )
+    parser.add_argument("--warmup", type=int, default=3, help="Number of warmup iterations")
+    parser.add_argument("--iterations", type=int, default=10, help="Number of benchmark iterations")
     parser.add_argument("--output", type=str, help="Output JSON file for results")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
 

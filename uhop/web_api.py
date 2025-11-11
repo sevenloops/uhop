@@ -30,8 +30,7 @@ def _cors_headers(h: BaseHTTPRequestHandler):
 
 
 def _info_json() -> dict:
-    from .backends import (is_opencl_available, is_torch_available,
-                           is_triton_available)
+    from .backends import is_opencl_available, is_torch_available, is_triton_available
     from .hardware import detect_hardware
 
     hw = detect_hardware()
@@ -40,12 +39,9 @@ def _info_json() -> dict:
     try:
         import torch  # type: ignore
 
-        mps_avail = bool(
-            getattr(torch.backends, "mps", None) and torch.backends.mps.is_available()
-        )
+        mps_avail = bool(getattr(torch.backends, "mps", None) and torch.backends.mps.is_available())
         try:
-            from .backends.torch_backend import \
-                _torch_device_preference as _pref
+            from .backends.torch_backend import _torch_device_preference as _pref
 
             dev = _pref()
             torch_pref = getattr(dev, "type", None) if dev is not None else None

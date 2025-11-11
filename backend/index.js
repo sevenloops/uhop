@@ -49,6 +49,44 @@ function wsSend(ws, obj) {
   try { ws.send(JSON.stringify(obj)); } catch (e) {}
 }
 
+// Protocol validation mirroring Python uhop.protocol
+const PROTOCOL_VERSION = '0.1';
+const KNOWN_ACTIONS = new Set(['info','benchmark','compile_kernel','validate','cache_list','cache_set','cache_delete','run_demo','generate_kernel']);
+function validateIncoming(obj) {
+  if (typeof obj !== 'object' || obj === null) return { ok: false, reason: 'Message must be JSON object' };
+  if (obj.v !== PROTOCOL_VERSION) return { ok: false, reason: `Unsupported protocol version '${obj.v}'` };
+  const t = obj.type;
+  if (typeof t !== 'string') return { ok: false, reason: "Missing or invalid 'type'" };
+  if (t === 'hello') {
+    if (typeof obj.agent !== 'string') return { ok: false, reason: "Field 'agent' must be string" };
+    if (typeof obj.version !== 'string') return { ok: false, reason: "Field 'version' must be string" };
+    return { ok: true };
+  }
+  if (t === 'log') {
+    if (typeof obj.level !== 'string') return { ok: false, reason: "Field 'level' must be string" };
+    if (typeof obj.line !== 'string') return { ok: false, reason: "Field 'line' must be string" };
+    return { ok: true };
+  }
+  if (t === 'request') {
+    if (typeof obj.id !== 'string') return { ok: false, reason: "Field 'id' must be string" };
+    if (typeof obj.action !== 'string') return { ok: false, reason: "Field 'action' must be string" };
+    if (!KNOWN_ACTIONS.has(obj.action)) return { ok: false, reason: `Unknown action '${obj.action}'` };
+    if (obj.params !== undefined && (typeof obj.params !== 'object' || obj.params === null)) return { ok: false, reason: "'params' must be object if present" };
+    return { ok: true };
+  }
+  if (t === 'response') {
+    if (typeof obj.id !== 'string') return { ok: false, reason: "Field 'id' must be string" };
+    if (typeof obj.ok !== 'boolean') return { ok: false, reason: "Field 'ok' must be bool" };
+    if (obj.ok) {
+      if (typeof obj.data !== 'object' || obj.data === null) return { ok: false, reason: "'data' must be object when ok=true" };
+    } else {
+      if (typeof obj.error !== 'string') return { ok: false, reason: "'error' must be string when ok=false" };
+    }
+    return { ok: true };
+  }
+  return { ok: false, reason: `Unknown message type '${t}'` };
+}
+
 function askAgent(action, params = {}, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     if (!isOpen(agentSocket)) {
@@ -81,6 +119,15 @@ wss.on('connection', (ws, req) => {
       let msg = null;
       try { msg = JSON.parse(String(data)); } catch { return; }
       if (!msg) return;
+      // Validate incoming
+      const vres = validateIncoming(msg);
+      if (!vres.ok) {
+        // If it's a request with an id, respond with structured error; else ignore
+        if (msg && msg.type === 'request' && typeof msg.id === 'string') {
+          wsSend(ws, { v: PROTOCOL_VERSION, type: 'response', id: msg.id, ok: false, error: vres.reason || 'invalid_request' });
+        }
+        return;
+      }
       if (msg.type === 'hello') {
         const token = msg.token || null;
         if (AGENT_TOKEN && token !== AGENT_TOKEN) {
@@ -126,18 +173,18 @@ function runUhopCommand(args, options = {}) {
       stdio: ['pipe', 'pipe', 'pipe'],
       ...options
     });
-    
+
     let stdout = '';
     let stderr = '';
-    
+
     child.stdout.on('data', (data) => {
       stdout += data.toString();
     });
-    
+
     child.stderr.on('data', (data) => {
       stderr += data.toString();
     });
-    
+
     child.on('close', (code) => {
       if (code === 0) {
         resolve({ stdout: stdout.trim(), stderr: stderr.trim(), code });
@@ -145,7 +192,7 @@ function runUhopCommand(args, options = {}) {
         reject(new Error(`Command failed with code ${code}: ${stderr}`));
       }
     });
-    
+
     child.on('error', (error) => {
       reject(error);
     });
@@ -172,18 +219,18 @@ except Exception as e:
       cwd: projectRoot,
       stdio: ['pipe', 'pipe', 'pipe']
     });
-    
+
     let stdout = '';
     let stderr = '';
-    
+
     child.stdout.on('data', (data) => {
       stdout += data.toString();
     });
-    
+
     child.stderr.on('data', (data) => {
       stderr += data.toString();
     });
-    
+
     child.on('close', (code) => {
       if (code === 0) {
         try {
@@ -196,7 +243,7 @@ except Exception as e:
         reject(new Error(`Demo failed with code ${code}: ${stderr}`));
       }
     });
-    
+
     child.on('error', (error) => {
       reject(error);
     });
@@ -207,7 +254,7 @@ except Exception as e:
 app.post('/connect', async (req, res) => {
   try {
     broadcast('[U-HOP] Detecting hardware and initializing backends...');
-    
+
     // Prefer local agent if connected
     let info = null;
     try {
@@ -220,14 +267,14 @@ app.post('/connect', async (req, res) => {
       broadcast('[U-HOP] Using server hardware info');
     }
     deviceInfo = info;
-    
+
     // Convert to device format expected by frontend
     const devices = [];
-    
+
     // Add detected device with better priority
     let deviceType = 'CPU';
     let deviceName = deviceInfo.name || 'Unknown';
-    
+
     // Priority: CUDA GPU > OpenCL GPU > CPU
     if (deviceInfo.kind === 'cuda') {
       deviceType = 'GPU';
@@ -245,14 +292,14 @@ app.post('/connect', async (req, res) => {
         deviceName = deviceInfo.name || 'CPU';
       }
     }
-    
+
     devices.push({
       id: 'primary-device',
       type: deviceType,
       name: deviceName,
       status: 'connected'
     });
-    
+
     // Add additional info if available
     if (deviceInfo.torch_available) {
       devices.push({
@@ -262,11 +309,11 @@ app.post('/connect', async (req, res) => {
         status: 'connected'
       });
     }
-    
+
     isConnected = true;
     broadcast(`[U-HOP] Connected to ${deviceType}: ${deviceName}`);
     broadcast(`[U-HOP] Backend capabilities: Torch=${deviceInfo.torch_available}, OpenCL=${deviceInfo.opencl_available}`);
-    
+
     res.json({ ok: true, devices });
   } catch (error) {
     broadcast(`[U-HOP] Error during hardware detection: ${error.message}`);
@@ -280,12 +327,12 @@ app.get('/devices', (req, res) => {
     res.json({ devices: [] });
     return;
   }
-  
+
   const devices = [];
-  
+
   let deviceType = 'CPU';
   let deviceName = deviceInfo.name || 'Unknown';
-  
+
   // Priority: CUDA GPU > OpenCL GPU > CPU
   if (deviceInfo.kind === 'cuda') {
     deviceType = 'GPU';
@@ -302,14 +349,14 @@ app.get('/devices', (req, res) => {
       deviceName = deviceInfo.name || 'CPU';
     }
   }
-  
+
   devices.push({
     id: 'primary-device',
     type: deviceType,
     name: deviceName,
     status: 'connected'
   });
-  
+
   res.json({ devices });
 });
 
@@ -320,12 +367,12 @@ app.post('/run-demo', async (req, res) => {
       broadcast('[U-HOP] No devices connected. Run "Connect Devices" first.');
       return res.status(400).json({ error: 'no_devices' });
     }
-    
+
     const size = parseInt(req.body.size) || 128;
     const iters = parseInt(req.body.iters) || 2;
-    
+
     broadcast(`[U-HOP] Running matmul benchmark (${size}x${size}, ${iters} iterations)...`);
-    
+
     let result = null;
     try {
       // Try local agent first
@@ -336,16 +383,16 @@ app.post('/run-demo', async (req, res) => {
       result = await runUhopDemo(size, iters);
       broadcast('[U-HOP] Demo executed on server');
     }
-    
+
     // Parse the stdout to get individual lines for broadcasting
     const lines = result.stdout.split('\n').filter(line => line.trim());
     lines.forEach(line => broadcast(`[U-HOP] ${line}`));
-    
-  const deviceType = deviceInfo?.kind === 'cuda' ? 'GPU' : 
+
+  const deviceType = deviceInfo?.kind === 'cuda' ? 'GPU' :
             deviceInfo?.kind === 'opencl' ? 'GPU' : 'CPU';
-    
-    res.json({ 
-      result: 'success', 
+
+    res.json({
+      result: 'success',
       time: (result.timings.uhop * 1000).toFixed(2), // Convert to ms
       device: deviceType,
       timings: result.timings
@@ -360,7 +407,7 @@ app.post('/run-demo', async (req, res) => {
 app.post('/generate-kernel', async (req, res) => {
   try {
     broadcast('[U-HOP][AI] Generating optimized kernel using AI...');
-    
+
     // Prefer local agent for generation (uses user's API key if set locally)
     try {
       const data = await askAgent('generate_kernel', { target: 'opencl' }, 60000);
@@ -421,4 +468,61 @@ app.get('/health', async (req, res) => {
 app.get('/agent-status', (req, res) => {
   const agentOk = isOpen(agentSocket);
   res.json({ connected: agentOk });
+});
+
+// Relay: compile_kernel (agent preferred)
+app.post('/compile-kernel', async (req, res) => {
+  try {
+    const params = req.body || {};
+    try {
+      const data = await askAgent('compile_kernel', params, 30000);
+      return res.json(data);
+    } catch (e) {
+      return res.status(503).json({ error: 'no_agent', message: 'Compile requires local agent' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Relay: validate (agent preferred)
+app.post('/validate', async (req, res) => {
+  try {
+    const params = req.body || {};
+    try {
+      const data = await askAgent('validate', params, 30000);
+      return res.json(data);
+    } catch (e) {
+      return res.status(503).json({ error: 'no_agent', message: 'Validate requires local agent' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// KPI snapshot passthrough
+app.get('/kpi', async (req, res) => {
+  try {
+    const fs = await import('fs');
+    const os = await import('os');
+    const pathMod = await import('path');
+    const cacheDir = pathMod.join(os.homedir(), '.uhop_mvp_cache');
+    const metricsPath = pathMod.join(cacheDir, 'metrics.json');
+    // If not present, try to generate once via CLI
+    if (!fs.existsSync(metricsPath)) {
+      try {
+        await runUhopCommand(['-m', 'uhop.cli_kpi']);
+      } catch (e) {
+        // ignore; we will return 404 later
+      }
+    }
+    if (!fs.existsSync(metricsPath)) {
+      return res.status(404).json({ error: 'metrics_not_available' });
+    }
+    const txt = fs.readFileSync(metricsPath, 'utf8');
+    const data = JSON.parse(txt);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });

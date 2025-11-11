@@ -53,9 +53,7 @@ def detect_hardware() -> HardwareProfile:
             gpus = [d for d in p.get_devices() if d.type & cl.device_type.GPU]
             if gpus:
                 dev = gpus[0]
-                vendor_raw = (
-                    getattr(dev, "vendor", None) or getattr(p, "vendor", "")
-                ).lower()
+                vendor_raw = (getattr(dev, "vendor", None) or getattr(p, "vendor", "")).lower()
                 if "amd" in vendor_raw:
                     vendor = "amd"
                 elif "nvidia" in vendor_raw:
@@ -64,11 +62,7 @@ def detect_hardware() -> HardwareProfile:
                     vendor = "intel"
                 else:
                     vendor = getattr(p, "vendor", "unknown")
-                name = (
-                    getattr(dev, "name", None)
-                    or getattr(p, "name", None)
-                    or "OpenCL GPU"
-                )
+                name = getattr(dev, "name", None) or getattr(p, "name", None) or "OpenCL GPU"
                 return HardwareProfile(
                     vendor=vendor,
                     kind="opencl",
@@ -85,9 +79,7 @@ def detect_hardware() -> HardwareProfile:
             cpus = [d for d in p.get_devices() if d.type & cl.device_type.CPU]
             if cpus:
                 dev = cpus[0]
-                vendor_raw = (
-                    getattr(dev, "vendor", None) or getattr(p, "vendor", "")
-                ).lower()
+                vendor_raw = (getattr(dev, "vendor", None) or getattr(p, "vendor", "")).lower()
                 if "amd" in vendor_raw:
                     vendor = "amd"
                 elif "nvidia" in vendor_raw:
@@ -96,11 +88,7 @@ def detect_hardware() -> HardwareProfile:
                     vendor = "intel"
                 else:
                     vendor = getattr(p, "vendor", "unknown")
-                name = (
-                    getattr(dev, "name", None)
-                    or getattr(p, "name", None)
-                    or "OpenCL CPU"
-                )
+                name = getattr(dev, "name", None) or getattr(p, "name", None) or "OpenCL CPU"
                 return HardwareProfile(
                     vendor=vendor,
                     kind="opencl-cpu",

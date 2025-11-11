@@ -29,9 +29,7 @@ def test_conv2d_correctness(N, Cin, H, W, Cout, KH, KW, stride, pad):
     outH = (H + 2 * pad - KH) // stride + 1
     outW = (W + 2 * pad - KW) // stride + 1
     if TORCH:
-        ref = F.conv2d(
-            torch.from_numpy(x), torch.from_numpy(w), stride=stride, padding=pad
-        ).numpy()
+        ref = F.conv2d(torch.from_numpy(x), torch.from_numpy(w), stride=stride, padding=pad).numpy()
     else:
         ref = np.zeros((N, Cout, outH, outW), dtype=np.float32)
         for n in range(N):

@@ -49,6 +49,16 @@ dev = [
 ]
 amd = ["rocm-py>=6.0.1"]
 nvidia = ["cupy-cuda12x>=13.0.0"]
+edge = [
+    # Minimal dependencies for edge devices (Raspberry Pi, Jetson, mobile)
+    # Excludes PyTorch (~2GB), Triton, and AI codegen dependencies
+    "numpy>=1.26.0",
+    "pyopencl>=2024.2",
+    "click>=8.1.7",
+    "tabulate>=0.9.0",
+    "orjson>=3.10.7",
+    "filelock>=3.15.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/sevenloops/uhop"
@@ -58,6 +68,7 @@ Source = "https://github.com/sevenloops/uhop"
 [project.scripts]
 uhop = "uhop.cli:main"
 uhop-agent = "uhop.agent:main"
+uhop-kpi = "uhop.cli_kpi:main"
 
 [tool.setuptools]
 include-package-data = true
@@ -116,3 +127,7 @@ ignore = ["E501", "E731"]
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501", "E731"]
 "uhop/benchmarks/*" = ["E501", "E731"]
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]

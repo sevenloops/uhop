@@ -6,6 +6,7 @@ Provides a thin wrapper around CLBlastSgemm for single-precision GEMM that
 accepts PyOpenCL queue and buffers. If the CLBlast shared library is not found,
 `load_clblast()` returns None.
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -77,6 +78,9 @@ def sgemm(
     beta: float = 0.0,
     a_transpose: bool = False,
     b_transpose: bool = False,
+    a_offset: int = 0,
+    b_offset: int = 0,
+    c_offset: int = 0,
 ) -> int:
     """
     Run CLBlastSgemm in row-major layout: C[M,N] = alpha * A[M,K] @ B[K,N] + beta*C.
@@ -152,14 +156,14 @@ def sgemm(
         c_size_t(K),
         c_float(alpha),
         c_void_p(int(a_buf_int_ptr)),
-        c_size_t(0),
+        c_size_t(int(a_offset)),
         c_size_t(a_ld),
         c_void_p(int(b_buf_int_ptr)),
-        c_size_t(0),
+        c_size_t(int(b_offset)),
         c_size_t(b_ld),
         c_float(beta),
         c_void_p(int(c_buf_int_ptr)),
-        c_size_t(0),
+        c_size_t(int(c_offset)),
         c_size_t(c_ld),
         c_void_p(int(queue_int_ptr)),
         ctypes.byref(out_event),

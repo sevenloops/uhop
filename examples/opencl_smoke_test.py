@@ -3,6 +3,7 @@ Quick smoke test for OpenCL kernels added in uhop/kernels/opencl.
 This script compiles a few kernels and runs them to validate they execute.
 Requires: pyopencl, numpy, an OpenCL device.
 """
+
 import numpy as np
 
 try:
@@ -13,6 +14,7 @@ except Exception as e:
 from pathlib import Path
 
 KDIR = Path(__file__).resolve().parents[1] / "uhop" / "kernels" / "opencl"
+
 
 def build_program(ctx, fname: str) -> cl.Program:
     src = (KDIR / fname).read_text()
@@ -57,8 +59,8 @@ def run_reduce_sum(ctx, q):
 
 def run_transpose(ctx, q):
     prg = build_program(ctx, "transpose_dot.cl")
-    x = np.arange(3*4, dtype=np.float32).reshape(3,4)
-    y = np.zeros((4,3), dtype=np.float32)
+    x = np.arange(3 * 4, dtype=np.float32).reshape(3, 4)
+    y = np.zeros((4, 3), dtype=np.float32)
     mf = cl.mem_flags
     x_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=x)
     y_buf = cl.Buffer(ctx, mf.WRITE_ONLY, y.nbytes)
@@ -75,6 +77,7 @@ def main():
     run_reduce_sum(ctx, q)
     run_transpose(ctx, q)
     print("OpenCL smoke tests passed.")
+
 
 if __name__ == "__main__":
     main()

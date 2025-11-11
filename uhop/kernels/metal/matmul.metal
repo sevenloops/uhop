@@ -13,7 +13,7 @@ kernel void matmul_kernel(device const float* A [[buffer(0)]],
                           uint2 gid [[thread_position_in_grid]]) {
     uint row = gid.y;
     uint col = gid.x;
-    
+
     if (row < N && col < K) {
         float sum = 0.0f;
         for (int i = 0; i < M; ++i) {

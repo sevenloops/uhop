@@ -23,9 +23,7 @@ def is_mps_available() -> bool:
     if not _TORCH_OK:
         return False
     try:  # pragma: no cover - depends on host
-        return bool(
-            getattr(torch.backends, "mps", None) and torch.backends.mps.is_available()
-        )
+        return bool(getattr(torch.backends, "mps", None) and torch.backends.mps.is_available())
     except Exception:
         return False
 

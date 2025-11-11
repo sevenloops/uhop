@@ -21,9 +21,7 @@ class CudaExecutor:
 
             self.module = SourceModule(self.source_code)
 
-    def run_matmul(
-        self, func_name: str, A: np.ndarray, B: np.ndarray, block=(16, 16, 1)
-    ):
+    def run_matmul(self, func_name: str, A: np.ndarray, B: np.ndarray, block=(16, 16, 1)):
         import numpy as _np
         import pycuda.driver as cuda
 

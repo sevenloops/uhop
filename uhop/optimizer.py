@@ -12,10 +12,9 @@ Order of preference:
 
 Cache is per op-name (MVP). Optional strict validation can gate AI kernels.
 """
+
 from __future__ import annotations
 
-import os
-import platform
 from functools import wraps
 from pathlib import Path
 from typing import Callable, Optional
@@ -23,16 +22,31 @@ from typing import Callable, Optional
 import numpy as np
 
 from .ai_codegen.generator import AICodegen
+
 # backends
-from .backends import (is_opencl_available, is_torch_available,
-                       is_triton_available, opencl_conv2d, opencl_matmul,
-                       opencl_relu, torch_conv2d, torch_matmul, torch_relu,
-                       triton_matmul, triton_relu)
+# lite backend for edge devices (only if torch is not available)
+try:
+    from .backends.lite_backend import (
+        lite_conv2d,
+        lite_matmul,
+        lite_relu,
+    )
+
+    _LITE_BACKEND_AVAILABLE = True
+except ImportError:
+    _LITE_BACKEND_AVAILABLE = False
+
+from . import config as _cfg
+from .backends.base import get_backend_manager  # real backend manager
 from .cache import UhopCache
 from .core.benchmark import benchmark_callable
 from .hardware import detect_hardware
+from .policy import BackendPolicy  # new policy layer
 from .sandbox import run_generated_python
+from .utils.logging import get_logger as _get_logger
 from .validation import validate_kernel
+
+_log = _get_logger("uhop.optimizer")
 
 
 def _torch_has_accelerator() -> bool:
@@ -40,8 +54,7 @@ def _torch_has_accelerator() -> bool:
         import torch  # type: ignore
 
         return bool(getattr(torch, "cuda", None) and torch.cuda.is_available()) or (
-            getattr(torch.backends, "mps", None) is not None
-            and torch.backends.mps.is_available()
+            getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available()
         )
     except Exception:
         return False
@@ -51,10 +64,34 @@ CACHE = UhopCache()
 
 
 class UHopOptimizer:
-    def __init__(self):
+    def __init__(self, keep_format=None):
+        """
+        Initialize UHOP optimizer.
+
+        Args:
+            keep_format: Control return format for torch backend
+                - None (default): Auto-detect based on input types
+                - True: Always return torch.Tensor (avoids conversion overhead)
+                - False: Always return numpy arrays
+        """
         self.hw = detect_hardware()
         self.cache = CACHE
         self.codegen = AICodegen()
+        self.keep_format = keep_format
+        # Initialize backend manager & policy (lazy backend registration may happen elsewhere)
+        try:
+            self.backend_manager = get_backend_manager()
+            # Ensure default backends are registered for policy to introspect
+            try:
+                from .backends.registry import ensure_default_backends_registered
+
+                ensure_default_backends_registered()
+            except Exception:
+                pass
+            self.policy = BackendPolicy(self.backend_manager, self.cache)
+        except Exception:
+            self.backend_manager = None
+            self.policy = None
         try:
             import pycuda  # type: ignore  # noqa: F401
 
@@ -146,22 +183,20 @@ class UHopOptimizer:
             def wrapper(*args, **kwargs):
                 # Quick override for tests/dev: force calling the Python
                 # baseline implementation and skip backend selection.
-                if os.environ.get("UHOP_FORCE_BASELINE", "0") not in (
-                    "0",
-                    "false",
-                    "False",
-                    "",
-                    None,
-                ):
+                if bool(_cfg.get("UHOP_FORCE_BASELINE")):
                     return fn(*args, **kwargs)
 
                 if len(args) < 1:
                     raise ValueError("need at least one positional arg")
                 a = args[0]
                 b = args[1] if len(args) > 1 else None
-                # Optional per-shape/dtype caching
-                per_shape = os.environ.get("UHOP_CACHE_PER_SHAPE", "0")
-                per_shape = per_shape not in ("0", "false", "False", None)
+                # Optional per-shape/dtype caching (new default: enabled unless explicitly disabled)
+                env_flag = _cfg.get("UHOP_CACHE_PER_SHAPE")
+                # Accept both boolean and string forms; treat True and common truthy strings as enabling per-shape cache
+                if isinstance(env_flag, bool):
+                    per_shape = env_flag
+                else:
+                    per_shape = str(env_flag).lower() in ("", "1", "true", "yes", "on") or env_flag is None
                 if per_shape:
                     parts = [str(_sig_from_val(a))]
                     if b is not None:
@@ -173,100 +208,115 @@ class UHopOptimizer:
                 # 0) Cached backend first
                 rec = self.cache.get(cache_key)
                 if rec:
+                    # Optional side-by-side explain on cache hit
+                    try:
+                        if self.policy is not None and bool(_cfg.get("UHOP_EXPLAIN_ON_CACHE")):
+                            explanation = self.policy.explain(
+                                op_name, list(args), kwargs, warmup=0, iterations=1, collect_stats=False
+                            )
+                            sel = explanation.get("selected", {}) or {}
+                            sugg = sel.get("name")
+                            cached_backend = rec.get("backend")
+                            if cached_backend != sugg and sugg is not None:
+                                _log.info(
+                                    f"cache-hit backend divergence op={op_name} cached={cached_backend} suggested={sugg}"
+                                )
+                            else:
+                                _log.debug(f"cache-hit backend confirm op={op_name} backend={cached_backend}")
+                    except Exception:
+                        pass
                     backend = rec.get("backend")
                     try:
-                        if backend == "torch":
+                        # First, route through BackendManager for registered backends
+                        if backend in ("torch", "triton", "opencl") and self.backend_manager is not None:
+                            be = self.backend_manager.get_backend(backend)
+                            if be is not None and be.capabilities.available:
+                                return be.execute(op_name, *args, **kwargs)
+                        # Lite and AI-generated paths are not managed by BackendManager yet
+                        if backend == "lite" and _LITE_BACKEND_AVAILABLE:
                             if op_name == "matmul":
-                                return torch_matmul(a, b)
+                                return lite_matmul(a, b)
                             if op_name == "conv2d":
-                                return torch_conv2d(
+                                return lite_conv2d(
                                     a,
                                     b,
                                     stride=kwargs.get("stride", 1),
                                     padding=kwargs.get("padding", 0),
                                 )
                             if op_name == "relu":
-                                return torch_relu(a)
-                        if backend == "triton":
-                            if op_name == "matmul":
-                                return triton_matmul(a, b)
-                            if op_name == "relu":
-                                return triton_relu(a)
-                        if backend == "opencl":
-                            if op_name == "matmul":
-                                return opencl_matmul(a, b)
-                            if op_name == "conv2d":
-                                return opencl_conv2d(
-                                    a,
-                                    b,
-                                    stride=kwargs.get("stride", 1),
-                                    padding=kwargs.get("padding", 0),
-                                )
-                            if op_name == "relu":
-                                return opencl_relu(a)
+                                return lite_relu(a)
                         if backend == "ai_cuda":
                             path = rec.get("path")
                             kname = rec.get("kernel_name", f"{op_name}_kernel")
                             arr0 = np.array(a)
                             arr1 = np.array(b) if b is not None else None
-                            return self._run_cuda_source_via_pycuda(
-                                Path(path), kname, arr0, arr1
-                            )
+                            _log.debug(f"cache-hit backend=ai_cuda key={cache_key}")
+                            return self._run_cuda_source_via_pycuda(Path(path), kname, arr0, arr1)
                         if backend == "ai_python":
                             path = rec.get("path")
                             fname = rec.get("function", f"generated_{op_name}")
                             arr0 = np.array(a)
                             arr1 = np.array(b) if b is not None else None
-                            return run_generated_python(
-                                str(path),
-                                fname,
-                                arr0,
-                                arr1,
-                                timeout=sandbox_timeout,
-                            )
+                            _log.debug(f"cache-hit backend=ai_python key={cache_key}")
+                            return run_generated_python(str(path), fname, arr0, arr1, timeout=sandbox_timeout)
                     except Exception:
                         pass
 
-                # 0.5) Environment override order
+                # 0.5) Policy layer unified selection (order-probe or benchmark) if available
+                if self.policy is not None:
+                    try:
+                        selected = self.policy.select(op_name, args, kwargs)
+                        if selected is not None:
+                            self.cache.set(
+                                cache_key,
+                                {
+                                    "backend": selected.backend_name,
+                                    "policy": selected.policy_reason,
+                                    "latency_ms": (
+                                        float(selected.latency_ms) if selected.latency_ms is not None else None
+                                    ),
+                                    "hardware": self.hw.__dict__,
+                                },
+                            )
+                            _log.info(
+                                f"selected backend via policy: {selected.backend_name} op={op_name} reason={selected.policy_reason}"
+                            )
+                            return selected.run(*args, **kwargs)
+                    except Exception:
+                        pass
+
+                # 0.6) Environment override order (routed via BackendManager)
                 # Example: UHOP_BACKEND_PREFERENCE="opencl,torch,triton,cpu,numpy"
-                pref = os.environ.get("UHOP_BACKEND_PREFERENCE")
+                pref = _cfg.get("UHOP_BACKEND_PREFERENCE")
                 if pref:
-                    order = [p.strip().lower() for p in pref.split(",") if p.strip()]
+                    order = [p.strip().lower() for p in str(pref).split(",") if p.strip()]
 
                     def _try_backend(name: str):
                         try:
-                            if name in ("torch", "cpu") and is_torch_available():
-                                if op_name == "matmul":
-                                    return torch_matmul(a, b)
-                                if op_name == "conv2d":
-                                    return torch_conv2d(
-                                        a,
-                                        b,
-                                        stride=kwargs.get("stride", 1),
-                                        padding=kwargs.get("padding", 0),
-                                    )
-                                if op_name == "relu":
-                                    return torch_relu(a)
-                            if name == "triton" and is_triton_available():
-                                if op_name == "matmul":
-                                    return triton_matmul(a, b)
-                                if op_name == "relu":
-                                    return triton_relu(a)
-                            if name == "opencl" and is_opencl_available():
-                                if op_name == "matmul":
-                                    return opencl_matmul(a, b)
-                                if op_name == "conv2d":
-                                    return opencl_conv2d(
-                                        a,
-                                        b,
-                                        stride=kwargs.get("stride", 1),
-                                        padding=kwargs.get("padding", 0),
-                                    )
-                                if op_name == "relu":
-                                    return opencl_relu(a)
                             if name in ("numpy", "baseline"):
-                                # Force baseline
-                                return fn(*args, **kwargs)
+                                return ("numpy", fn(*args, **kwargs))
+                            # Map aliases
+                            alias = {"cpu": "torch"}.get(name, name)
+                            if self.backend_manager is not None:
+                                be = self.backend_manager.get_backend(alias)
+                                if be is not None and be.capabilities.available:
+                                    return (alias, be.execute(op_name, *args, **kwargs))
+                            # Lite path (not in BackendManager yet)
+                            if alias == "lite" and _LITE_BACKEND_AVAILABLE:
+                                if op_name == "matmul":
+                                    return ("lite", lite_matmul(a, b))
+                                if op_name == "conv2d":
+                                    return (
+                                        "lite",
+                                        lite_conv2d(
+                                            a,
+                                            b,
+                                            stride=kwargs.get("stride", 1),
+                                            padding=kwargs.get("padding", 0),
+                                        ),
+                                    )
+                                if op_name == "relu":
+                                    return ("lite", lite_relu(a))
                         except Exception:
                             return None
                         return None
@@ -274,10 +324,7 @@ class UHopOptimizer:
                     for name in order:
                         res = _try_backend(name)
                         if res is not None:
-                            # cache the chosen backend if it's a recognized one
-                            chosen = name
-                            if chosen in ("baseline", "numpy"):
-                                chosen = "numpy"
+                            chosen, value = res
                             self.cache.set(
                                 cache_key,
                                 {
@@ -285,146 +332,10 @@ class UHopOptimizer:
                                     "hardware": self.hw.__dict__,
                                 },
                             )
-                            return res
+                            _log.info(f"selected backend via preference: {chosen} op={op_name}")
+                            return value
 
-                # 1) Torch accelerator preferred on macOS (MPS)
-                try:
-                    if (
-                        platform.system() == "Darwin"
-                        and is_torch_available()
-                        and _torch_has_accelerator()
-                    ):
-                        if op_name == "matmul":
-                            res = torch_matmul(a, b)
-                            self.cache.set(
-                                cache_key,
-                                {
-                                    "backend": "torch",
-                                    "hardware": self.hw.__dict__,
-                                },
-                            )
-                            return res
-                        if op_name == "conv2d":
-                            res = torch_conv2d(
-                                a,
-                                b,
-                                stride=kwargs.get("stride", 1),
-                                padding=kwargs.get("padding", 0),
-                            )
-                            self.cache.set(
-                                cache_key,
-                                {
-                                    "backend": "torch",
-                                    "hardware": self.hw.__dict__,
-                                },
-                            )
-                            return res
-                        if op_name == "relu":
-                            res = torch_relu(a)
-                            self.cache.set(
-                                cache_key,
-                                {
-                                    "backend": "torch",
-                                    "hardware": self.hw.__dict__,
-                                },
-                            )
-                            return res
-                except Exception:
-                    pass
-
-                # 2) Triton
-                try:
-                    if is_triton_available():
-                        if op_name == "matmul":
-                            res = triton_matmul(a, b)
-                            self.cache.set(
-                                cache_key,
-                                {
-                                    "backend": "triton",
-                                    "hardware": self.hw.__dict__,
-                                },
-                            )
-                            return res
-                        if op_name == "relu":
-                            res = triton_relu(a)
-                            return res
-                except Exception:
-                    pass
-
-                # 3) OpenCL
-                try:
-                    if is_opencl_available():
-                        if op_name == "matmul":
-                            res = opencl_matmul(a, b)
-                            self.cache.set(
-                                cache_key,
-                                {
-                                    "backend": "opencl",
-                                    "hardware": self.hw.__dict__,
-                                },
-                            )
-                            return res
-                        if op_name == "conv2d":
-                            res = opencl_conv2d(
-                                a,
-                                b,
-                                stride=kwargs.get("stride", 1),
-                                padding=kwargs.get("padding", 0),
-                            )
-                            self.cache.set(
-                                cache_key,
-                                {
-                                    "backend": "opencl",
-                                    "hardware": self.hw.__dict__,
-                                },
-                            )
-                            return res
-                        if op_name == "relu":
-                            res = opencl_relu(a)
-                            return res
-                except Exception:
-                    pass
-
-                # 4) Torch fallback (CPU allowed)
-                try:
-                    if is_torch_available():
-                        if op_name == "matmul":
-                            res = torch_matmul(a, b)
-                            self.cache.set(
-                                cache_key,
-                                {
-                                    "backend": "torch",
-                                    "hardware": self.hw.__dict__,
-                                },
-                            )
-                            return res
-                        if op_name == "conv2d":
-                            res = torch_conv2d(
-                                a,
-                                b,
-                                stride=kwargs.get("stride", 1),
-                                padding=kwargs.get("padding", 0),
-                            )
-                            self.cache.set(
-                                cache_key,
-                                {
-                                    "backend": "torch",
-                                    "hardware": self.hw.__dict__,
-                                },
-                            )
-                            return res
-                        if op_name == "relu":
-                            res = torch_relu(a)
-                            self.cache.set(
-                                cache_key,
-                                {
-                                    "backend": "torch",
-                                    "hardware": self.hw.__dict__,
-                                },
-                            )
-                            return res
-                except Exception:
-                    pass
+                # 1-4) Legacy hard-coded per-backend fallbacks removed in favor of Policy/BackendManager
 
                 # 5) Baseline vs AI generation
                 try:
@@ -445,13 +356,9 @@ class UHopOptimizer:
                         try:
                             arr0 = np.array(a)
                             arr1 = np.array(b) if b is not None else None
-                            _ = self._run_cuda_source_via_pycuda(
-                                ai_path, f"{op_name}_kernel", arr0, arr1
-                            )
+                            _ = self._run_cuda_source_via_pycuda(ai_path, f"{op_name}_kernel", arr0, arr1)
                             t_ai = benchmark_callable(
-                                lambda: self._run_cuda_source_via_pycuda(
-                                    ai_path, f"{op_name}_kernel", arr0, arr1
-                                ),
+                                lambda: self._run_cuda_source_via_pycuda(ai_path, f"{op_name}_kernel", arr0, arr1),
                                 runs=2,
                             )
                             ai_backend = "ai_cuda"
@@ -489,8 +396,7 @@ class UHopOptimizer:
                     t_ai = float("inf")
 
                 # Strict validation (optional)
-                strict = os.environ.get("UHOP_STRICT_VALIDATE", "0")
-                strict = strict not in ("0", "false", "False", None)
+                strict = bool(_cfg.get("UHOP_STRICT_VALIDATE"))
                 is_valid = True
                 if strict and ai_path:
                     try:
@@ -540,11 +446,10 @@ class UHopOptimizer:
                                 "hardware": self.hw.__dict__,
                             },
                         )
+                        _log.info(f"selected backend: ai_cuda op={op_name}")
                         arr0 = np.array(a)
                         arr1 = np.array(b) if b is not None else None
-                        return self._run_cuda_source_via_pycuda(
-                            ai_path, f"{op_name}_kernel", arr0, arr1
-                        )
+                        return self._run_cuda_source_via_pycuda(ai_path, f"{op_name}_kernel", arr0, arr1)
                     else:
                         self.cache.set(
                             cache_key,
@@ -555,6 +460,7 @@ class UHopOptimizer:
                                 "hardware": self.hw.__dict__,
                             },
                         )
+                        _log.info(f"selected backend: ai_python op={op_name}")
                         arr0 = np.array(a)
                         arr1 = np.array(b) if b is not None else None
                         return run_generated_python(
@@ -575,6 +481,7 @@ class UHopOptimizer:
                         "hardware": self.hw.__dict__,
                     },
                 )
+                _log.info(f"selected backend: numpy (baseline) op={op_name}")
                 return fn(*args, **kwargs)
 
             return wrapper

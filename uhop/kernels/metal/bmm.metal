@@ -15,13 +15,13 @@ kernel void bmm_kernel(device const float* A [[buffer(0)]],
     uint b = gid.z;
     uint row = gid.y;
     uint col = gid.x;
-    
+
     if (b >= batch_size || row >= M || col >= K) return;
-    
+
     uint a_offset = b * M * N;
     uint b_offset = b * N * K;
     uint c_offset = b * M * K;
-    
+
     float sum = 0.0f;
     for (uint i = 0; i < N; ++i) {
         sum += A[a_offset + row * N + i] * B[b_offset + i * K + col];

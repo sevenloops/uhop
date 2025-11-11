@@ -28,6 +28,7 @@ export default function Portal() {
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [showHelp, setShowHelp] = useState<boolean>(false);
+  const [kpi, setKpi] = useState<any | null>(null);
 
   useEffect(() => {
     let closed = false;
@@ -158,6 +159,19 @@ export default function Portal() {
       setHealth(j.ok ? "ok" : "bad");
     } catch (_e) {
       setHealth("down");
+    }
+  }
+
+  async function refreshKPI() {
+    try {
+      const r = await fetch(`${API_BASE}/kpi`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      setKpi(j);
+    } catch (error) {
+      setLogs((prev) =>
+        [...prev, `[Error] KPI fetch failed: ${error}`].slice(-500),
+      );
     }
   }
 
@@ -417,6 +431,12 @@ export default function Portal() {
               >
                 Health Check
               </button>
+              <button
+                className="w-full py-2 rounded bg-[#0b1324] hover:bg-[#111c34] border border-[#374151]"
+                onClick={refreshKPI}
+              >
+                Refresh KPI Snapshot
+              </button>
             </div>
 
             {/* Status */}
@@ -523,6 +543,101 @@ export default function Portal() {
                   '// Click "Generate AI Kernel" to view an AI-generated CUDA/OpenCL kernel\n// Real UHOP AI will generate optimized kernels based on your hardware'}
               </code>
             </pre>
+          </section>
+
+          {/* KPI Snapshot Panel */}
+          <section className="md:col-span-3">
+            <div className="text-sm mb-2">KPI Snapshot</div>
+            <div className="rounded border border-[#374151] bg-[#0f172a] p-3 text-xs">
+              {!kpi ? (
+                <div className="text-[#64748b]">
+                  Click "Refresh KPI Snapshot" to load metrics
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-[#9ca3af] mb-1">
+                      Backend Selection Counts
+                    </div>
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr>
+                          <th className="border-b border-[#374151] pb-1">
+                            Backend
+                          </th>
+                          <th className="border-b border-[#374151] pb-1">
+                            Count
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(kpi.backend_selection_counts || {}).map(
+                          ([b, c]: [string, any]) => (
+                            <tr key={b}>
+                              <td className="py-1 pr-4">{b}</td>
+                              <td className="py-1">{String(c)}</td>
+                            </tr>
+                          ),
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div>
+                    <div className="text-[#9ca3af] mb-1">
+                      Backend Latency Quantiles (ms)
+                    </div>
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr>
+                          <th className="border-b border-[#374151] pb-1">
+                            Backend
+                          </th>
+                          <th className="border-b border-[#374151] pb-1">
+                            Count
+                          </th>
+                          <th className="border-b border-[#374151] pb-1">
+                            p50
+                          </th>
+                          <th className="border-b border-[#374151] pb-1">
+                            p90
+                          </th>
+                          <th className="border-b border-[#374151] pb-1">
+                            p99
+                          </th>
+                          <th className="border-b border-[#374151] pb-1">
+                            Mean
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(
+                          kpi.backend_latency_quantiles || {},
+                        ).map(([b, q]: [string, any]) => (
+                          <tr key={b}>
+                            <td className="py-1 pr-4">{b}</td>
+                            <td className="py-1 pr-4">
+                              {String(q?.count ?? 0)}
+                            </td>
+                            <td className="py-1 pr-4">
+                              {q?.p50 != null ? q.p50.toFixed(3) : "-"}
+                            </td>
+                            <td className="py-1 pr-4">
+                              {q?.p90 != null ? q.p90.toFixed(3) : "-"}
+                            </td>
+                            <td className="py-1 pr-4">
+                              {q?.p99 != null ? q.p99.toFixed(3) : "-"}
+                            </td>
+                            <td className="py-1 pr-4">
+                              {q?.mean != null ? q.mean.toFixed(3) : "-"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
           </section>
         </div>
       </div>

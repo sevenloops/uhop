@@ -5,8 +5,9 @@ Runs a few steps to compare behavior and loss values against UHOP demo.
 """
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
+import torch.optim as optim
+
 
 class TinyCNN(nn.Module):
     def __init__(self):
@@ -30,6 +31,7 @@ def train_one_epoch():
         loss.backward()
         opt.step()
         print(f"[baseline] step {i} loss {loss.item():.6f}")
+
 
 if __name__ == "__main__":
     print("[BASELINE] Starting tiny training demo (no UHOP)")

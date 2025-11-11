@@ -3,12 +3,15 @@
 Demonstrate UHOP optimizing a naive Python baseline to GPU via OpenCL.
 This reflects UHOP's goal: take developer code and accelerate it by choosing the best backend.
 """
-import time
 import statistics
+import time
+
 import numpy as np
+
 from uhop import UHopOptimizer
 
 hop = UHopOptimizer()
+
 
 # Naive python matmul baseline (triple loop): correctness-first, very slow
 @hop.optimize("matmul")
@@ -72,6 +75,7 @@ def main():
         print("UHOP wins ✅")
     else:
         print("Baseline faster (unexpected for naive baseline)")
+
 
 if __name__ == "__main__":
     main()

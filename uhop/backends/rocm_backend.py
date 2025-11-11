@@ -61,16 +61,11 @@ class ROCmBackend(Backend):
 
                 props = torch.cuda.get_device_properties(i)
                 # ROCm uses gcnArchName
-                self.capabilities.compute_capability = getattr(
-                    props, "gcnArchName", "unknown"
-                )
+                self.capabilities.compute_capability = getattr(props, "gcnArchName", "unknown")
                 self.capabilities.memory_gb = props.total_memory / (1024**3)
 
             # Check for MIOpen (ROCm's equivalent to cuDNN)
-            self._miopen_available = (
-                hasattr(torch.backends, "miopen")
-                and torch.backends.miopen.is_available()
-            )
+            self._miopen_available = hasattr(torch.backends, "miopen") and torch.backends.miopen.is_available()
             if self._miopen_available:
                 self.capabilities.vendor_libs["miopen"] = True
 
@@ -183,9 +178,7 @@ class ROCmBackend(Backend):
 
         if self._miopen_available:
             # Conv2D via MIOpen
-            def miopen_conv2d(
-                input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1
-            ):
+            def miopen_conv2d(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1):
                 if not isinstance(input, self._torch.Tensor):
                     input = self._torch.tensor(input, dtype=self._torch.float32)
                 if not isinstance(weight, self._torch.Tensor):
@@ -198,9 +191,7 @@ class ROCmBackend(Backend):
                 if bias is not None:
                     bias = bias.cuda()
 
-                return self._torch.nn.functional.conv2d(
-                    input, weight, bias, stride, padding, dilation, groups
-                )
+                return self._torch.nn.functional.conv2d(input, weight, bias, stride, padding, dilation, groups)
 
             self.register_vendor_kernel("conv2d", miopen_conv2d, "miopen")
 
@@ -247,9 +238,7 @@ class ROCmBackend(Backend):
                     input = self._torch.tensor(input, dtype=self._torch.float32)
                 input = input.cuda()
 
-                return self._torch.nn.functional.max_pool2d(
-                    input, kernel_size, stride, padding
-                )
+                return self._torch.nn.functional.max_pool2d(input, kernel_size, stride, padding)
 
             self.register_vendor_kernel("maxpool2d", miopen_maxpool2d, "miopen")
 

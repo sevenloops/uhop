@@ -3,12 +3,15 @@
 Benchmark matmul with UHOP (GPU-preferred backends) vs NumPy baseline.
 On AMD Radeon, UHOP should select OpenCL and beat CPU NumPy for moderate sizes.
 """
-import time
 import statistics
+import time
+
 import numpy as np
+
 from uhop import UHopOptimizer
 
 hop = UHopOptimizer()
+
 
 @hop.optimize("matmul")
 def matmul_np(A, B):
@@ -40,6 +43,7 @@ def main():
     # Pure NumPy baseline
     def baseline(A, B):
         return A @ B
+
     t_base = bench(baseline, A, B)
 
     print(f"UHOP (optimized): {t_uhop:.4f} s median")
@@ -48,6 +52,7 @@ def main():
         print("UHOP wins ✅")
     else:
         print("Baseline faster (try larger N or ensure GPU drivers are active)")
+
 
 if __name__ == "__main__":
     main()

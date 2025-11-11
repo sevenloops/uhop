@@ -3,12 +3,15 @@
 Benchmark ReLU with UHOP (OpenCL) vs NumPy baseline on a large array.
 ReLU is bandwidth-bound and should show GPU advantage more clearly than matmul on CPU MKL.
 """
-import time
 import statistics
+import time
+
 import numpy as np
+
 from uhop import UHopOptimizer
 
 hop = UHopOptimizer()
+
 
 @hop.optimize("relu")
 def relu_np(x):
@@ -41,6 +44,7 @@ def main():
         print("UHOP wins ✅")
     else:
         print("Baseline faster (ensure AMD driver + OpenCL runtime, try larger N)")
+
 
 if __name__ == "__main__":
     main()

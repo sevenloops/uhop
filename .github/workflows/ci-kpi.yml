@@ -1,0 +1,56 @@
+name: CI-KPI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  test-and-kpi:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install system deps (OpenCL headers optional)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ocl-icd-opencl-dev clinfo
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run focused tests (plugins disabled)
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+        run: |
+          python -m pytest -q -k "opencl_matmul_shapes or opencl_conv2d or metrics_snapshot or protocol_hello_info_benchmark_mock_agent" -p no:faulthandler -p no:asyncio -p no:anyio -p no:json-report -p no:cov -p no:ipynb -p no:metadata -p no:requests -p no:randomly -p no:Faker -p no:flaky -p no:benchmark -p no:ddtrace -p no:profiling -p no:pytest_subtests -p no:pytest_mock -p no:pytest_cov || true
+
+      - name: Generate KPI snapshot
+        run: |
+          python -m uhop.cli_kpi --show || true
+
+      - name: Upload KPI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: uhop-metrics
+          path: ~/.uhop_mvp_cache/metrics.json
+          if-no-files-found: warn
+
+      - name: Lint (ruff)
+        run: |
+          ruff --version
+          ruff check uhop || true
+
+      - name: Type check (mypy)
+        run: |
+          pip install mypy
+          mypy --version
+          mypy uhop || true

@@ -96,9 +96,7 @@ class _Handler(BaseHTTPRequestHandler):
             _cors_headers(self)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(
-                json.dumps({"error": "command not allowed"}).encode("utf-8")
-            )
+            self.wfile.write(json.dumps({"error": "command not allowed"}).encode("utf-8"))
             return
         try:
             parts = shlex.split(cmd)

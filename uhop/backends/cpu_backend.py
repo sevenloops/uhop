@@ -152,9 +152,7 @@ class CPUBackend(Backend):
         self.register_vendor_kernel("bmm", cpu_bmm, "cpu")
 
         # Conv2D
-        def cpu_conv2d(
-            input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1
-        ):
+        def cpu_conv2d(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1):
             if not isinstance(input, self._torch.Tensor):
                 input = self._torch.tensor(input, dtype=self._torch.float32)
             if not isinstance(weight, self._torch.Tensor):
@@ -207,9 +205,7 @@ class CPUBackend(Backend):
             if bias is not None:
                 bias = bias.cpu()
 
-            return self._torch.nn.functional.layer_norm(
-                input, normalized_shape, weight, bias, eps
-            )
+            return self._torch.nn.functional.layer_norm(input, normalized_shape, weight, bias, eps)
 
         self.register_vendor_kernel("layernorm", cpu_layernorm, "cpu")
 
@@ -253,9 +249,7 @@ class CPUBackend(Backend):
             if not isinstance(input, self._torch.Tensor):
                 input = self._torch.tensor(input, dtype=self._torch.float32)
 
-            return self._torch.nn.functional.max_pool2d(
-                input.cpu(), kernel_size, stride, padding
-            )
+            return self._torch.nn.functional.max_pool2d(input.cpu(), kernel_size, stride, padding)
 
         self.register_vendor_kernel("maxpool2d", cpu_maxpool2d, "cpu")
 
@@ -305,9 +299,7 @@ class CPUBackend(Backend):
 
         self.register_vendor_kernel("fused_bias_gelu", cpu_fused_bias_gelu, "cpu")
 
-        def cpu_fused_add_layernorm(
-            x, residual, normalized_shape, weight=None, bias=None, eps=1e-5
-        ):
+        def cpu_fused_add_layernorm(x, residual, normalized_shape, weight=None, bias=None, eps=1e-5):
             if not isinstance(x, self._torch.Tensor):
                 x = self._torch.tensor(x, dtype=self._torch.float32)
             if not isinstance(residual, self._torch.Tensor):
@@ -322,9 +314,7 @@ class CPUBackend(Backend):
                 eps,
             )
 
-        self.register_vendor_kernel(
-            "fused_add_layernorm", cpu_fused_add_layernorm, "cpu"
-        )
+        self.register_vendor_kernel("fused_add_layernorm", cpu_fused_add_layernorm, "cpu")
 
         def cpu_fused_conv2d_relu(input, weight, bias=None, stride=1, padding=0):
             output = cpu_conv2d(input, weight, bias, stride, padding)

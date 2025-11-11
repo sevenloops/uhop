@@ -2,6 +2,7 @@
 """
 Benchmark helpers for UHOP. Ensures warm-up and correct device synchronization.
 """
+
 from statistics import median
 from time import perf_counter
 from typing import Any, Callable, Iterable, List, Optional

@@ -5,9 +5,7 @@ from typing import Callable, Tuple
 import numpy as np
 
 
-def time_function(
-    func: Callable, args: Tuple = (), kwargs: dict = None, repeats: int = 3
-) -> float:
+def time_function(func: Callable, args: Tuple = (), kwargs: dict = None, repeats: int = 3) -> float:
     kwargs = kwargs or {}
     # warm-up
     for _ in range(1):

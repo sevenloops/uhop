@@ -15,18 +15,18 @@ kernel void layernorm_kernel(device const float* input [[buffer(0)]],
                              uint tid [[thread_index_in_threadgroup]],
                              threadgroup float* shared_data [[threadgroup(0)]]) {
     uint batch_idx = gid / normalized_shape;
-    
+
     if (batch_idx >= batch_size) return;
-    
+
     uint offset = batch_idx * normalized_shape;
-    
+
     // Compute mean
     float sum = 0.0f;
     for (uint i = 0; i < normalized_shape; ++i) {
         sum += input[offset + i];
     }
     float mean = sum / float(normalized_shape);
-    
+
     // Compute variance
     float var_sum = 0.0f;
     for (uint i = 0; i < normalized_shape; ++i) {
@@ -35,7 +35,7 @@ kernel void layernorm_kernel(device const float* input [[buffer(0)]],
     }
     float variance = var_sum / float(normalized_shape);
     float inv_std = rsqrt(variance + eps);
-    
+
     // Normalize and scale
     uint i = tid;
     while (i < normalized_shape) {

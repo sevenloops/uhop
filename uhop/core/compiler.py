@@ -14,9 +14,7 @@ from typing import Dict, Optional
 
 class NVCCCompiler:
     @staticmethod
-    def compile_cu_to_ptx(
-        source_path: str, arch: str = "sm_70", out_path: Optional[str] = None
-    ) -> str:
+    def compile_cu_to_ptx(source_path: str, arch: str = "sm_70", out_path: Optional[str] = None) -> str:
         src = Path(source_path)
         out = Path(out_path) if out_path else src.with_suffix(".ptx")
         cmd = ["nvcc", "-ptx", f"-arch={arch}", str(src), "-o", str(out)]

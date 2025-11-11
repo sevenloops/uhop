@@ -27,8 +27,7 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass
-from typing import (Any, Callable, Dict, Iterable, List, Optional, Sequence,
-                    Tuple)
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 

@@ -66,8 +66,7 @@ class CuDNNBackend(Backend):
             self.capabilities.vendor_libs["cudnn"] = True
 
             logger.info(
-                f"[cuDNN] Initialized v{self._cudnn_version} with "
-                f"{self.capabilities.device_count} device(s)"
+                f"[cuDNN] Initialized v{self._cudnn_version} with " f"{self.capabilities.device_count} device(s)"
             )
 
             # Set up cuDNN-optimized kernels
@@ -140,9 +139,7 @@ class CuDNNBackend(Backend):
         self._torch.backends.cudnn.benchmark = True
 
         # Conv2D (cuDNN's bread and butter)
-        def cudnn_conv2d(
-            input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1
-        ):
+        def cudnn_conv2d(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1):
             if not isinstance(input, self._torch.Tensor):
                 input = self._torch.tensor(input, dtype=self._torch.float32)
             if not isinstance(weight, self._torch.Tensor):
@@ -155,9 +152,7 @@ class CuDNNBackend(Backend):
             if bias is not None:
                 bias = bias.cuda()
 
-            return self._torch.nn.functional.conv2d(
-                input, weight, bias, stride, padding, dilation, groups
-            )
+            return self._torch.nn.functional.conv2d(input, weight, bias, stride, padding, dilation, groups)
 
         self.register_vendor_kernel("conv2d", cudnn_conv2d, "cudnn")
 
@@ -202,9 +197,7 @@ class CuDNNBackend(Backend):
             if bias is not None:
                 bias = bias.cuda()
 
-            return self._torch.nn.functional.layer_norm(
-                input, normalized_shape, weight, bias, eps
-            )
+            return self._torch.nn.functional.layer_norm(input, normalized_shape, weight, bias, eps)
 
         self.register_vendor_kernel("layernorm", cudnn_layernorm, "cudnn")
 
@@ -233,9 +226,7 @@ class CuDNNBackend(Backend):
                 input = self._torch.tensor(input, dtype=self._torch.float32)
             input = input.cuda()
 
-            return self._torch.nn.functional.max_pool2d(
-                input, kernel_size, stride, padding, dilation
-            )
+            return self._torch.nn.functional.max_pool2d(input, kernel_size, stride, padding, dilation)
 
         self.register_vendor_kernel("maxpool2d", cudnn_maxpool2d, "cudnn")
 
@@ -258,16 +249,12 @@ class CuDNNBackend(Backend):
             output = cudnn_conv2d(input, weight, bias, stride, padding)
             return self._torch.nn.functional.relu(output)
 
-        self.register_vendor_kernel(
-            "fused_conv2d_relu", cudnn_fused_conv2d_relu, "cudnn"
-        )
+        self.register_vendor_kernel("fused_conv2d_relu", cudnn_fused_conv2d_relu, "cudnn")
 
         # Scaled Dot-Product Attention (cuDNN 8.9+, torch 2.0+)
         if hasattr(self._torch.nn.functional, "scaled_dot_product_attention"):
 
-            def cudnn_sdpa(
-                query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False
-            ):
+            def cudnn_sdpa(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False):
                 if not isinstance(query, self._torch.Tensor):
                     query = self._torch.tensor(query, dtype=self._torch.float32)
                 if not isinstance(key, self._torch.Tensor):
@@ -283,8 +270,6 @@ class CuDNNBackend(Backend):
                     query, key, value, attn_mask, dropout_p, is_causal
                 )
 
-            self.register_vendor_kernel(
-                "scaled_dot_product_attention", cudnn_sdpa, "cudnn"
-            )
+            self.register_vendor_kernel("scaled_dot_product_attention", cudnn_sdpa, "cudnn")
 
         logger.debug(f"[cuDNN] Registered {len(self._vendor_kernels)} vendor kernels")

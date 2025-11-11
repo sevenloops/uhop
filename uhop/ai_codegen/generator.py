@@ -6,6 +6,7 @@ Consolidated AI Codegen provider.
 - Supports generating CUDA/OpenCL/Triton/Python kernels depending on requested target.
 - Saves generated code into uhop/generated_kernels/
 """
+
 import ast
 import os
 import re
@@ -54,7 +55,7 @@ def _verify_syntax_python(code: str) -> bool:
 
 
 class AICodegen:
-    def __init__(self, model: str = os.environ.get("UHOP_OPENAI_MODEL", "gpt-4o-mini")):
+    def __init__(self, model: Optional[str] = None):
         """AI Code generator.
 
         Parameters
@@ -63,7 +64,7 @@ class AICodegen:
             OpenAI chat model to use. Defaults to a broadly available model name.
             Override via UHOP_OPENAI_MODEL env var or passing model=.
         """
-        self.model = model
+        self.model = model or os.environ.get("UHOP_OPENAI_MODEL", "gpt-4o-mini")
         self.last_prompt: Optional[str] = None
         self.last_error: Optional[str] = None  # populated if a provider call fails
 
@@ -75,9 +76,7 @@ class AICodegen:
             "on",
         )
 
-    def _call_openai(
-        self, prompt: str, max_tokens: int = 1200, temperature: float = 0.0
-    ):
+    def _call_openai(self, prompt: str, max_tokens: int = 1200, temperature: float = 0.0):
         # Requires OPENAI_API_KEY; supports both legacy and v1 SDKs.
         if "OPENAI_API_KEY" not in os.environ:
             self.last_error = "OPENAI_API_KEY not set in environment"

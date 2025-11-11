@@ -25,7 +25,7 @@ Replace `api.yourdomain.com` with the backend URL provided by the portal (for de
 
 ```bash
 # Production (TLS):
-uhop-agent --server wss://api.yourdomain.com/agent --token YOUR_AGENT_TOKEN
+#uhop-agent --server wss://api.yourdomain.com/agent --token YOUR_AGENT_TOKEN
 
 # Local development:
 uhop-agent --server ws://127.0.0.1:8787/agent
@@ -37,9 +37,9 @@ uhop-agent --server ws://127.0.0.1:8787/agent
 
 ## Use the portal
 
-1) Open the demo portal page
-2) The Status panel should show `Agent: Connected`
-3) Click “Connect Devices”, then run benchmarks — they will execute on your machine
+1. Open the demo portal page
+2. The Status panel should show `Agent: Connected`
+3. Click “Connect Devices”, then run benchmarks — they will execute on your machine
 
 ## AI kernel generation with your key (optional)
 
@@ -75,3 +75,10 @@ uhop-agent --server wss://api.yourdomain.com/agent --token YOUR_AGENT_TOKEN
 uhop info --json           # local hardware snapshot
 uhop-agent --debug ...     # verbose agent logs
 ```
+
+## Advanced: IR CLI and lowering
+
+If you want to experiment locally with the intermediate representation (IR) path and OpenCL lowering used by the agent, see "UHOP IR and Scheduling" and the IR MVP doc:
+
+- docs/UHOP_IR_AND_SCHEDULING.md
+- docs/IR_MVP.md (includes an IR CLI with lower/build/validate/bench commands)

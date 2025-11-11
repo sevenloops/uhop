@@ -8,9 +8,7 @@ when a single fused kernel isn't available yet on a backend.
 from typing import Any, Callable
 
 
-def fuse_kernels(
-    conv_fn: Callable[..., Any], relu_fn: Callable[..., Any]
-) -> Callable[..., Any]:
+def fuse_kernels(conv_fn: Callable[..., Any], relu_fn: Callable[..., Any]) -> Callable[..., Any]:
     """
     Return a callable that runs relu(conv(*args, **kwargs)).
     This enables easy fused execution paths for backends that don't yet have fused kernels.

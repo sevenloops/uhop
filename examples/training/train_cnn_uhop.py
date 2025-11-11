@@ -4,14 +4,17 @@ Tiny CNN training demo using UHOP-optimized conv2d + relu.
 This demo uses the UHOP autograd wrapper for conv2d (forward uses UHOP dispatch,
 backward uses a CPU torch fallback for correctness in Phase1).
 """
-import torch
 import math
+
+import torch
 import torch.nn as nn
 import torch.optim as optim
-from uhop.pytorch_wrappers import UHOPConv2DFunction
+
 from uhop import UHopOptimizer
+from uhop.pytorch_wrappers import UHOPConv2DFunction
 
 hop = UHopOptimizer()
+
 
 class TinyCNN(nn.Module):
     def __init__(self):
@@ -26,6 +29,7 @@ class TinyCNN(nn.Module):
         # x: (N, C, H, W)
         return UHOPConv2DFunction.apply(x, self.weight, 1, 0)
 
+
 def train_one_epoch():
     torch.manual_seed(0)
     model = TinyCNN()
@@ -39,6 +43,7 @@ def train_one_epoch():
         loss.backward()
         opt.step()
         print(f"step {i} loss {loss.item():.6f}")
+
 
 if __name__ == "__main__":
     print("[UHOP] Starting tiny training demo")

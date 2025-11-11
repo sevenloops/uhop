@@ -5,21 +5,26 @@ Runs warm-up, then times UHOP-decorated ops vs naive Python for clarity.
 Note: NumPy/torch are highly optimized and may outperform custom kernels on CPU-only systems; the goal here
 is to show UHOP vs naive reference and ensure UHOP > 1.5x faster.
 """
-import time
 import statistics
+import time
+
 import numpy as np
+
 from uhop import UHopOptimizer
 
 hop = UHopOptimizer()
 
+
 @hop.optimize("matmul")
-def matmul_np(A,B):
+def matmul_np(A, B):
     return np.array(A) @ np.array(B)
+
 
 @hop.optimize("relu")
 def relu_np(X):
     X = np.array(X, dtype=np.float32)
     return np.maximum(X, 0.0, dtype=np.float32)
+
 
 def bench(fn, *args, warm=2, iters=5):
     for _ in range(warm):
@@ -48,8 +53,8 @@ def run_matmul():
         return C
 
     N = 512
-    A = np.random.rand(N,N).astype(np.float32)
-    B = np.random.rand(N,N).astype(np.float32)
+    A = np.random.rand(N, N).astype(np.float32)
+    B = np.random.rand(N, N).astype(np.float32)
     # Warm UHOP
     _ = matmul_np(A, B)
     t_uh = bench(matmul_np, A, B, warm=1, iters=3)
@@ -63,7 +68,7 @@ def run_relu():
     # Naive Python loop baseline
     def relu_naive(X):
         X = list(X)
-        Y = [0.0]*len(X)
+        Y = [0.0] * len(X)
         for i, v in enumerate(X):
             Y[i] = v if v > 0.0 else 0.0
         return np.array(Y, dtype=np.float32)
@@ -83,8 +88,8 @@ def run_conv2d():
         N, C, H, W = x_in.shape
         Cout, Cin, KH, KW = w.shape
         assert C == Cin
-        outH = (H + 2*padding - KH) // stride + 1
-        outW = (W + 2*padding - KW) // stride + 1
+        outH = (H + 2 * padding - KH) // stride + 1
+        outW = (W + 2 * padding - KW) // stride + 1
         out = np.zeros((N, Cout, outH, outW), dtype=np.float32)
         for n in range(N):
             for co in range(Cout):
@@ -94,16 +99,16 @@ def run_conv2d():
                         for ci in range(Cin):
                             for ky in range(KH):
                                 for kx in range(KW):
-                                    iy = y*stride - padding + ky
-                                    ix = x_o*stride - padding + kx
+                                    iy = y * stride - padding + ky
+                                    ix = x_o * stride - padding + kx
                                     if 0 <= iy < H and 0 <= ix < W:
                                         s += x_in[n, ci, iy, ix] * w[co, ci, ky, kx]
                         out[n, co, y, x_o] = s
         return out
 
     rng = np.random.default_rng(0)
-    x = rng.standard_normal((2,3,64,64), dtype=np.float32)
-    w = rng.standard_normal((8,3,3,3), dtype=np.float32)
+    x = rng.standard_normal((2, 3, 64, 64), dtype=np.float32)
+    w = rng.standard_normal((8, 3, 3, 3), dtype=np.float32)
 
     @hop.optimize("conv2d")
     def conv2d_uhop(inp, wt):
@@ -111,9 +116,10 @@ def run_conv2d():
 
     _ = conv2d_uhop(x, w)
     t_uh = bench(conv2d_uhop, x, w, warm=1, iters=3)
-    t_naive = bench(lambda a,b: conv2d_naive(a,b,1,1), x, w, warm=0, iters=1)
+    t_naive = bench(lambda a, b: conv2d_naive(a, b, 1, 1), x, w, warm=0, iters=1)
     print(f"Conv2D UHOP: {t_uh:.4f} s | Naive: {t_naive:.4f} s | x{(t_naive/max(t_uh,1e-9)):.1f}")
     assert t_naive / max(t_uh, 1e-9) > 1.5, "UHOP should be >1.5x faster than naive"
+
 
 if __name__ == "__main__":
     print("[Benchmark Suite] Starting...")
