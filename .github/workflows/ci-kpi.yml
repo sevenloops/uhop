@@ -38,7 +38,7 @@ jobs:
           python -m uhop.cli_kpi --show || true
 
       - name: Upload KPI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: uhop-metrics
           path: ~/.uhop_mvp_cache/metrics.json
