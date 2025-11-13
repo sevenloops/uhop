@@ -1,12 +1,14 @@
 """
-UHOP Minimal IR (v0) for kernel lowering.
 
-This IR intentionally models a tiny subset needed for the MVP:
- - Tensors with shape and dtype
- - Ops: MatMul, Relu, and FusedMatMulRelu
- - Optional Schedule hints (tile sizes / vectorization)
+UHOP Enhanced IR (v0.1.0) for kernel lowering.
 
-The IR can be serialized to and from JSON-compatible dicts.
+
+
+
+
+
+
+Enhanced IR with versioning, memory spaces, layouts, and stable hashing.
 """
 from .ir import (
     DType,
@@ -17,6 +19,17 @@ from .ir import (
     Relu,
     FusedMatMulRelu,
     ir_from_dict,
+    compute_stable_hash,
+    IR_VERSION,
+    MEMORY_SPACE_GLOBAL,
+    MEMORY_SPACE_LOCAL,
+
+    MEMORY_SPACE_PRIVATE,
+    MEMORY_SPACE_CONSTANT,
+    LAYOUT_ROW_MAJOR,
+    LAYOUT_COL_MAJOR,
+    LAYOUT_NCHW,
+    LAYOUT_NHWC,
 )
 
 __all__ = [
@@ -28,4 +41,15 @@ __all__ = [
     "Relu",
     "FusedMatMulRelu",
     "ir_from_dict",
+    "compute_stable_hash",
+    "IR_VERSION",
+    "MEMORY_SPACE_GLOBAL",
+    "MEMORY_SPACE_LOCAL",
+
+    "MEMORY_SPACE_PRIVATE",
+    "MEMORY_SPACE_CONSTANT",
+    "LAYOUT_ROW_MAJOR",
+    "LAYOUT_COL_MAJOR",
+    "LAYOUT_NCHW",
+    "LAYOUT_NHWC",
 ]

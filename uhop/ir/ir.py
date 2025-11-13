@@ -1,11 +1,32 @@
+"""
+Enhanced IR with versioning, memory spaces, layouts, and stable hashing.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List
+import json
+import hashlib
 
 
 # Simple dtype alias for MVP
 DType = str  # e.g., "f32"
+
+# IR versioning
+IR_VERSION = "0.1.0"
+
+# Memory space constants
+MEMORY_SPACE_GLOBAL = "global"
+MEMORY_SPACE_LOCAL = "local"
+MEMORY_SPACE_PRIVATE = "private"
+MEMORY_SPACE_CONSTANT = "constant"
+
+# Layout constants
+LAYOUT_ROW_MAJOR = "row_major"
+LAYOUT_COL_MAJOR = "col_major"
+LAYOUT_NCHW = "nchw"
+LAYOUT_NHWC = "nhwc"
 
 
 @dataclass
@@ -13,9 +34,21 @@ class Tensor:
     name: str
     shape: Tuple[int, ...]
     dtype: DType = "f32"
+    layout: str = LAYOUT_ROW_MAJOR
+    strides: Optional[Tuple[int, ...]] = None
+    memory_space: str = MEMORY_SPACE_GLOBAL
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"name": self.name, "shape": list(self.shape), "dtype": self.dtype}
+        result = {
+            "name": self.name,
+            "shape": list(self.shape),
+            "dtype": self.dtype,
+            "layout": self.layout,
+            "memory_space": self.memory_space,
+        }
+        if self.strides:
+            result["strides"] = list(self.strides)
+        return result
 
     @staticmethod
     def from_dict(d: Dict[str, Any]) -> "Tensor":
@@ -23,6 +56,9 @@ class Tensor:
             name=str(d["name"]),
             shape=tuple(int(x) for x in d.get("shape", [])),
             dtype=str(d.get("dtype", "f32")),
+            layout=str(d.get("layout", LAYOUT_ROW_MAJOR)),
+            strides=tuple(int(x) for x in d["strides"]) if d.get("strides") else None,
+            memory_space=str(d.get("memory_space", MEMORY_SPACE_GLOBAL)),
         )
 
 
@@ -32,6 +68,7 @@ class Schedule:
     tile_n: Optional[int] = None
     tile_k: Optional[int] = None
     vectorize: Optional[int] = None
+    unroll: Optional[int] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {}
@@ -43,6 +80,8 @@ class Schedule:
             d["tile_k"] = int(self.tile_k)
         if self.vectorize is not None:
             d["vectorize"] = int(self.vectorize)
+        if self.unroll is not None:
+            d["unroll"] = int(self.unroll)
         return d
 
     @staticmethod
@@ -53,14 +92,14 @@ class Schedule:
             tile_m=(int(d["tile_m"]) if d.get("tile_m") is not None else None),
             tile_n=(int(d["tile_n"]) if d.get("tile_n") is not None else None),
             tile_k=(int(d["tile_k"]) if d.get("tile_k") is not None else None),
-            vectorize=(
-                int(d["vectorize"]) if d.get("vectorize") is not None else None
-            ),
+            vectorize=(int(d["vectorize"]) if d.get("vectorize") is not None else None),
+            unroll=(int(d["unroll"]) if d.get("unroll") is not None else None),
         )
 
 
 class Op:
     op_type: str = "op"
+    version: str = IR_VERSION
 
     def to_dict(self) -> Dict[str, Any]:
         raise NotImplementedError
@@ -73,6 +112,7 @@ class MatMul(Op):
     C: Optional[Tensor] = None
     schedule: Optional[Schedule] = None
     op_type: str = "matmul"
+    version: str = IR_VERSION
 
     def infer_output(self) -> Tensor:
         m, k = self.A.shape
@@ -85,6 +125,7 @@ class MatMul(Op):
     def to_dict(self) -> Dict[str, Any]:
         return {
             "type": self.op_type,
+            "version": self.version,
             "A": self.A.to_dict(),
             "B": self.B.to_dict(),
             "C": self.C.to_dict() if self.C else None,
@@ -95,9 +136,7 @@ class MatMul(Op):
     def from_dict(d: Dict[str, Any]) -> "MatMul":
         A = Tensor.from_dict(d["A"]) if isinstance(d.get("A"), dict) else d["A"]
         B = Tensor.from_dict(d["B"]) if isinstance(d.get("B"), dict) else d["B"]
-        C = (
-            Tensor.from_dict(d["C"]) if isinstance(d.get("C"), dict) else None
-        )
+        C = Tensor.from_dict(d["C"]) if isinstance(d.get("C"), dict) else None
         sched = Schedule.from_dict(d.get("schedule"))
         return MatMul(A=A, B=B, C=C, schedule=sched)
 
@@ -107,6 +146,7 @@ class Relu(Op):
     X: Tensor
     Y: Optional[Tensor] = None
     op_type: str = "relu"
+    version: str = IR_VERSION
 
     def infer_output(self) -> Tensor:
         name = self.Y.name if self.Y else "Y"
@@ -115,6 +155,7 @@ class Relu(Op):
     def to_dict(self) -> Dict[str, Any]:
         return {
             "type": self.op_type,
+            "version": self.version,
             "X": self.X.to_dict(),
             "Y": self.Y.to_dict() if self.Y else None,
         }
@@ -122,9 +163,7 @@ class Relu(Op):
     @staticmethod
     def from_dict(d: Dict[str, Any]) -> "Relu":
         X = Tensor.from_dict(d["X"]) if isinstance(d.get("X"), dict) else d["X"]
-        Y = (
-            Tensor.from_dict(d["Y"]) if isinstance(d.get("Y"), dict) else None
-        )
+        Y = Tensor.from_dict(d["Y"]) if isinstance(d.get("Y"), dict) else None
         return Relu(X=X, Y=Y)
 
 
@@ -135,6 +174,7 @@ class FusedMatMulRelu(Op):
     Y: Optional[Tensor] = None
     schedule: Optional[Schedule] = None
     op_type: str = "fused_matmul_relu"
+    version: str = IR_VERSION
 
     def infer_output(self) -> Tensor:
         m, k = self.A.shape
@@ -147,6 +187,7 @@ class FusedMatMulRelu(Op):
     def to_dict(self) -> Dict[str, Any]:
         return {
             "type": self.op_type,
+            "version": self.version,
             "A": self.A.to_dict(),
             "B": self.B.to_dict(),
             "Y": self.Y.to_dict() if self.Y else None,
@@ -157,9 +198,7 @@ class FusedMatMulRelu(Op):
     def from_dict(d: Dict[str, Any]) -> "FusedMatMulRelu":
         A = Tensor.from_dict(d["A"]) if isinstance(d.get("A"), dict) else d["A"]
         B = Tensor.from_dict(d["B"]) if isinstance(d.get("B"), dict) else d["B"]
-        Y = (
-            Tensor.from_dict(d["Y"]) if isinstance(d.get("Y"), dict) else None
-        )
+        Y = Tensor.from_dict(d["Y"]) if isinstance(d.get("Y"), dict) else None
         sched = Schedule.from_dict(d.get("schedule"))
         return FusedMatMulRelu(A=A, B=B, Y=Y, schedule=sched)
 
@@ -174,3 +213,9 @@ def ir_from_dict(d: Dict[str, Any]) -> Op:
     if typ in ("fused_matmul_relu", "matmul_relu", "fused_matmul+relu"):
         return FusedMatMulRelu.from_dict(d)
     raise ValueError(f"Unknown IR op type: {typ}")
+
+
+def compute_stable_hash(ir_obj: Dict[str, Any]) -> str:
+    """Compute a stable SHA256 hash for IR objects using canonical JSON."""
+    canonical_json = json.dumps(ir_obj, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
