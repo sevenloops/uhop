@@ -81,6 +81,7 @@ pre-commit install
 - Add or update tests for user-visible changes.
 - Update docs (README/CONTRIBUTING) when changing UX or commands.
 - Ensure CI is green before requesting review.
+- When proposing net-new work, prefer opening an issue with the **Implementation task** template so deliverables, acceptance criteria, and definition of done are agreed up front.
 
 ## Code style
 
@@ -104,5 +105,6 @@ pre-commit install
 
 - We’ll squash-merge with a sensible Conventional Commit title for changelog clarity.
 - Tags and releases are done by maintainers.
+- For production/enterprise releases, walk through [`docs/release_checklist.md`](docs/release_checklist.md) and capture sign-off in the release tracking issue. The checklist covers sandbox enforcement, deterministic builds, metrics review, docs, comms, and rollback validation.
 
 Thanks again! If you’re unsure whether a change is desired, open an issue first to discuss.

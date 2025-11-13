@@ -1,8 +1,8 @@
 # uhop/ai_codegen/generator.py
 """
-Consolidated AI Codegen provider.
+Consolidated AI code generation providers.
 
-- Provider: OpenAI (ChatCompletion)
+- Providers: OpenAI, DeepSeek
 - Supports generating CUDA/OpenCL/Triton/Python kernels depending on requested target.
 - Saves generated code into uhop/generated_kernels/
 """
@@ -12,8 +12,6 @@ import os
 import re
 from pathlib import Path
 from typing import Optional
-
-deepseek_provider = None  # DeepSeek integration removed
 
 try:
     # Prefer OpenAI v1 SDK usage
@@ -28,8 +26,16 @@ except Exception:
     except Exception:
         openai = None  # type: ignore
 
+try:
+    import requests  # type: ignore
+except Exception:  # pragma: no cover - gracefully degrade when requests missing
+    requests = None  # type: ignore
+
 GENERATED_DIR = Path(__file__).resolve().parent.parent / "generated_kernels"
 GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+
+DEFAULT_SYSTEM_PROMPT = "You are an assistant that outputs runnable kernels (CUDA C, OpenCL C, Triton, or Python)."
+DEFAULT_DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
 
 
 def _extract_code_blocks(text: str):
@@ -55,16 +61,16 @@ def _verify_syntax_python(code: str) -> bool:
 
 
 class AICodegen:
-    def __init__(self, model: Optional[str] = None):
-        """AI Code generator.
+    def __init__(self, model: Optional[str] = None, provider: str = "openai"):
+        """AI Code generator capable of talking to multiple providers."""
 
-        Parameters
-        ----------
-        model: str
-            OpenAI chat model to use. Defaults to a broadly available model name.
-            Override via UHOP_OPENAI_MODEL env var or passing model=.
-        """
-        self.model = model or os.environ.get("UHOP_OPENAI_MODEL", "gpt-4o-mini")
+        self.provider = (provider or "openai").lower()
+        if model is None:
+            if self.provider == "deepseek":
+                model = os.environ.get("UHOP_DEEPSEEK_MODEL", "deepseek-coder")
+            else:
+                model = os.environ.get("UHOP_OPENAI_MODEL", "gpt-4o-mini")
+        self.model = model
         self.last_prompt: Optional[str] = None
         self.last_error: Optional[str] = None  # populated if a provider call fails
 
@@ -89,7 +95,7 @@ class AICodegen:
                     messages=[
                         {
                             "role": "system",
-                            "content": "You are an assistant that outputs runnable kernels (CUDA C, OpenCL C, Triton, or Python).",
+                            "content": DEFAULT_SYSTEM_PROMPT,
                         },
                         {"role": "user", "content": prompt},
                     ],
@@ -104,7 +110,7 @@ class AICodegen:
                     messages=[
                         {
                             "role": "system",
-                            "content": "You are an assistant that outputs runnable kernels (CUDA C, OpenCL C, Triton, or Python).",
+                            "content": DEFAULT_SYSTEM_PROMPT,
                         },
                         {"role": "user", "content": prompt},
                     ],
@@ -122,8 +128,47 @@ class AICodegen:
                 traceback.print_exc()
         return None
 
-    def _call_deepseek(self, prompt: str):
-        return None
+    def _call_deepseek(self, prompt: str, *, max_tokens: int = 1200, temperature: float = 0.0):
+        if requests is None:
+            self.last_error = "DeepSeek provider requires the 'requests' package"
+            return None
+        api_key = os.environ.get("DEEPSEEK_API_KEY")
+        if not api_key:
+            self.last_error = "DEEPSEEK_API_KEY not set in environment"
+            return None
+        url = os.environ.get("DEEPSEEK_API_BASE", DEFAULT_DEEPSEEK_URL)
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.model or "deepseek-coder",
+            "messages": [
+                {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": max(min(temperature, 1.0), 0.0),
+            "max_tokens": max_tokens,
+            "stream": False,
+        }
+        timeout_s = float(os.environ.get("DEEPSEEK_TIMEOUT", "45"))
+        try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=timeout_s)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:  # pragma: no cover - network errors
+            self.last_error = f"DeepSeek request failed: {type(e).__name__}: {e}"
+            if self._debug():
+                import traceback
+
+                traceback.print_exc()
+            return None
+
+        try:
+            return data["choices"][0]["message"]["content"]
+        except Exception:
+            self.last_error = "DeepSeek response missing message content"
+            return None
 
     def generate(
         self,
@@ -133,6 +178,7 @@ class AICodegen:
         *,
         temperature: float = 0.0,
         suffix: Optional[str] = None,
+        provider: Optional[str] = None,
     ) -> Path:
         """
         Generate a kernel for operation_name.
@@ -204,16 +250,19 @@ class AICodegen:
 
         # Try OpenAI first
         self.last_prompt = prompt
-        text = self._call_openai(prompt, temperature=temperature)
-        # provider fixed to OpenAI for now; variable removed to satisfy linter
+        resolved_provider = (provider or self.provider or "openai").lower()
+        if resolved_provider == "deepseek":
+            text = self._call_deepseek(prompt, max_tokens=1200, temperature=temperature)
+        else:
+            text = self._call_openai(prompt, max_tokens=1200, temperature=temperature)
 
         if not text:
             # Surface more helpful diagnostics
             detail = self.last_error or "unknown error"
             raise RuntimeError(
                 "AI code generation failed. "
-                f"Model='{self.model}'. Detail: {detail}. "
-                "Ensure OPENAI_API_KEY is valid and the model name is correct (override via UHOP_OPENAI_MODEL)."
+                f"Provider='{resolved_provider}', model='{self.model}'. Detail: {detail}. "
+                "Ensure the provider API key is configured and the model name is correct."
             )
 
         blocks = _extract_code_blocks(text)

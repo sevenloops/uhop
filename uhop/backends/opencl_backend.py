@@ -194,13 +194,13 @@ def _enqueue_registry_kernel(
     return evt
 
 
-def opencl_matmul(a, b):
+def opencl_matmul(a, b, *, ir=None):
     """Delegated to refactored MatmulOp module."""
     if cl is None:
         raise RuntimeError("pyopencl not available")
     from .opencl.matmul import MatmulOp
 
-    res = MatmulOp().execute(a, b)
+    res = MatmulOp().execute(a, b, ir=ir)
     return res.output
 
 

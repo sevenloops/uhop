@@ -232,8 +232,8 @@ class AIGenerationPipeline:
         # Provider registry. We keep separate AICodegen instances so each can
         # carry a provider-specific model name.
         self.providers: Dict[str, AICodegen] = {
-            "openai": AICodegen(model=os.environ.get("UHOP_OPENAI_MODEL")),
-            "deepseek": AICodegen(model=os.environ.get("UHOP_DEEPSEEK_MODEL", "deepseek-coder")),
+            "openai": AICodegen(model=os.environ.get("UHOP_OPENAI_MODEL"), provider="openai"),
+            "deepseek": AICodegen(model=os.environ.get("UHOP_DEEPSEEK_MODEL"), provider="deepseek"),
         }
 
         self.default_provider = (default_provider or os.environ.get("UHOP_AI_PROVIDER", "openai")).lower()
@@ -461,8 +461,24 @@ class AIGenerationPipeline:
             return False, None, None, "no kernel code generated"
 
         kernel_name = self._extract_kernel_name(kernel_code) or DEFAULT_OPENCL_KERNEL_NAME
+        offline_mode = self._should_use_offline_validation()
 
-        if self._should_use_offline_validation():
+        try:
+            result = self.validator.validate_and_profile_kernel(
+                kernel_code=kernel_code,
+                kernel_name=kernel_name,
+                operation="matmul",
+                input_shapes=spec.input_shapes,
+                offline_mode=offline_mode,
+            )
+        except Exception as exc:  # noqa: BLE001 - propagate readable failure
+            validation = ValidationResult(False, 0.0, 0.0, None, f"validation error: {exc}")
+            return False, validation, None, str(exc)
+
+        compile_success = bool(result.get("compile_success"))
+        validation_success = bool(result.get("validation_success")) if compile_success else False
+
+        if result.get("offline_mode") and compile_success:
             validation = ValidationResult(True, 0.0, 0.0, None, "offline-validation")
             profile = ProfileResult(
                 timing_ms=0.0,
@@ -471,23 +487,9 @@ class AIGenerationPipeline:
                 correctness=True,
                 max_abs_error=0.0,
                 max_rel_error=0.0,
-                logs="Offline validation: no GPU backend available",
+                logs="Offline validation: compilation succeeded but device execution was skipped",
             )
             return True, validation, profile, None
-
-        try:
-            result = self.validator.validate_and_profile_kernel(
-                kernel_code=kernel_code,
-                kernel_name=kernel_name,
-                operation="matmul",
-                input_shapes=spec.input_shapes,
-            )
-        except Exception as exc:  # noqa: BLE001 - propagate readable failure
-            validation = ValidationResult(False, 0.0, 0.0, None, f"validation error: {exc}")
-            return False, validation, None, str(exc)
-
-        compile_success = bool(result.get("compile_success"))
-        validation_success = bool(result.get("validation_success")) if compile_success else False
 
         validation = ValidationResult(
             ok=validation_success,

@@ -5,8 +5,6 @@ repos:
       - id: ruff
         args: ["--fix"]
         files: ^(uhop|tests|scripts|examples)/
-      - id: ruff-format
-        files: ^(uhop|tests|scripts|examples)/
 
   - repo: https://github.com/psf/black
     rev: 24.8.0

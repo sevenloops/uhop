@@ -1,3 +1,5 @@
+import json
+
 from uhop.ir import (
     LAYOUT_NCHW,
     MEMORY_SPACE_LOCAL,
@@ -6,6 +8,7 @@ from uhop.ir import (
     Relu,
     Schedule,
     Tensor,
+    compute_stable_hash,
     ir_from_dict,
 )
 
@@ -77,3 +80,33 @@ def test_schedule_unroll():
     schedule2 = Schedule.from_dict(d)
     assert schedule2.tile_m == 8
     assert schedule2.unroll == 4
+
+
+def test_compute_hash_is_order_invariant():
+    mm = MatMul(
+        A=Tensor("A", (4, 4)),
+        B=Tensor("B", (4, 4)),
+        schedule=Schedule(tile_m=8, tile_n=8, vectorize=4),
+    )
+    d1 = mm.to_dict()
+    d2 = {
+        "version": d1["version"],
+        "type": d1["type"],
+        "B": d1["B"],
+        "A": d1["A"],
+        "schedule": d1["schedule"],
+        "C": d1["C"],
+    }
+    assert compute_stable_hash(d1) == compute_stable_hash(d2)
+
+
+def test_compute_hash_changes_with_schedule():
+    mm = MatMul(
+        A=Tensor("A", (4, 4)),
+        B=Tensor("B", (4, 4)),
+        schedule=Schedule(tile_m=8, vectorize=1),
+    )
+    base = mm.to_dict()
+    variant = json.loads(json.dumps(base))
+    variant.setdefault("schedule", {})["tile_m"] = 16
+    assert compute_stable_hash(base) != compute_stable_hash(variant)

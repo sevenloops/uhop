@@ -1,0 +1,44 @@
+name: Implementation task
+description: File a scoped, contributor-friendly task with clear deliverables.
+title: "[Task] "
+labels:
+  - task
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Briefly describe the problem being solved and the high-level approach.
+    validations:
+      required: true
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: Deliverables
+      description: Enumerate the artifacts expected in the PR (files, CLIs, docs, tests).
+      placeholder: "- [ ] Update X\n- [ ] Add unit test for Y"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Outline the measurable outcomes or behaviors that demonstrate success.
+      placeholder: "- API returns XYZ\n- CLI output includes ..."
+    validations:
+      required: true
+  - type: textarea
+    id: dod
+    attributes:
+      label: Definition of Done
+      description: Capture any final validation, roll-out steps, or follow-up issues needed before closing.
+      placeholder: "- Docs updated\n- Release checklist item logged"
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I checked for existing issues/PRs that cover this work.
+        - label: I will update docs/tests as part of this task.

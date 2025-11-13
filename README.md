@@ -20,9 +20,9 @@ Key capabilities today:
 - Torch shim (`uhop.torch_shim`) for transparent accelerated `matmul` / `relu`
 - Vulkan backend PoC stub (disabled by default; see `docs/BACKEND_VULKAN_POC.md`)
 
-Vision: a universal, community-driven runtime optimizer that makes high‑performance computing approachable, portable, and fun — across vendors and form factors.
+Vision: a universal, community-driven runtime optimizer that makes high-performance computing approachable, portable, and fun — across vendors and form factors. For the long-range strategy, see [`docs/PRODUCTION_VISION.md`](docs/PRODUCTION_VISION.md).
 
-Planned (see `issues/`): multi‑backend benchmarking/policies, correctness suites, distributed training loops for AI‑generated kernels, richer dashboard, and tighter framework integrations (PyTorch/JAX).
+Planned (see `issues/`): multi-backend benchmarking/policies, correctness suites, distributed training loops for AI-generated kernels, richer dashboard, and tighter framework integrations (PyTorch/JAX). For competitive positioning notes, see [`docs/competitive_positioning.md`](docs/competitive_positioning.md).
 
 ---
 
@@ -149,65 +149,66 @@ Environment knobs
   Tip: `uhop config list` prints current effective config (incl. defaults).
   Common ones: - `UHOP_OPENCL_DEVICE_INDEX=<idx>` — default OpenCL device override - `UHOP_STRICT_VALIDATE=1` — tighten AI‑kernel validation during codegen - `UHOP_BACKEND_PREFERENCE=opencl,torch,triton,cpu,numpy` — override optimizer backend order (comma‑separated). Examples: `opencl,torch` to force OpenCL first; `torch,cpu` to prefer Torch; `numpy` to force baseline. - `UHOP_OPENCL_MATMUL_IMPL=naive|tiled|clblast` — pick matmul impl (tiled with validation is recommended where available) - `UHOP_OPENCL_CONV_IMPL=auto|tiled|im2col_gemm` — choose Conv2D implementation. `auto` prefers im2col+GEMM on larger shapes (CLBlast required) - `UHOP_OPENCL_VEC_CANDIDATES="1,2,4"` — compile-time vector widths candidates for OpenCL kernels - `UHOP_EXPLAIN_ON_CACHE=1` — when set, every cached backend use triggers a one-shot policy probe; divergences (cached vs current preference-chain suggestion) are logged.
 
-        ### Policy Introspection (New)
+### Policy Introspection (New)
 
-        Use the policy explain tool to see how UHOP chooses a backend for a given op + shapes and (optionally) benchmark each candidate:
+Use the policy explain tool to see how UHOP chooses a backend for a given op + shapes and (optionally) benchmark each candidate:
 
-        ```bash
-        uhop policy explain matmul --arg-shape 128x256 --arg-shape 256x64 --iters 3 --warmup 1 --stats
-        uhop policy explain conv2d --arg-shape 1x3x64x64 --arg-shape 8x3x3x3 --iters 2 --stats
-        uhop policy explain relu --arg-shape 1048576 --iters 5 --stats --json
-        ```
+```bash
+uhop policy explain matmul --arg-shape 128x256 --arg-shape 256x64 --iters 3 --warmup 1 --stats
+uhop policy explain conv2d --arg-shape 1x3x64x64 --arg-shape 8x3x3x3 --iters 2 --stats
+uhop policy explain relu --arg-shape 1048576 --iters 5 --stats --json
+```
 
-        Output shows:
+Output shows:
 
-        - Preference order (from `UHOP_BACKEND_PREFERENCE` or default)
-        - Each candidate: success/skip, latency (median ms), optional stats (mean/min/max/std)
-        - Selected backend and reason (`order_probe` or `forced_baseline`)
-        - Per-shape cache key + cached record (if any)
-        - Comparison line: cached vs suggested backend, highlighting divergence
+- Preference order (from `UHOP_BACKEND_PREFERENCE` or default)
+- Each candidate: success/skip, latency (median ms), optional stats (mean/min/max/std)
+- Selected backend and reason (`order_probe` or `forced_baseline`)
+- Per-shape cache key + cached record (if any)
+- Comparison line: cached vs suggested backend, highlighting divergence
 
-        JSON output additionally includes:
+JSON output additionally includes:
 
-        - `env`: relevant environment flags (`UHOP_BACKEND_PREFERENCE`, `UHOP_FORCE_BASELINE`, `UHOP_STRICT_VALIDATE`)
-        - `params`: warmup/iteration/stat collection parameters
-        - Full stats block (if `--stats` used)
+- `env`: relevant environment flags (`UHOP_BACKEND_PREFERENCE`, `UHOP_FORCE_BASELINE`, `UHOP_STRICT_VALIDATE`)
+- `params`: warmup/iteration/stat collection parameters
+- Full stats block (if `--stats` used)
 
-        Set `UHOP_EXPLAIN_ON_CACHE=1` to log a lightweight explain probe when an existing cached backend is reused during normal optimized function calls. This helps identify stale or suboptimal cached choices early.
+Set `UHOP_EXPLAIN_ON_CACHE=1` to log a lightweight explain probe when an existing cached backend is reused during normal optimized function calls. This helps identify stale or suboptimal cached choices early.
 
-        #### Policy Modes
+#### Policy Modes
 
-        You can choose how UHOP selects a backend:
+You can choose how UHOP selects a backend:
 
-        - `order_probe` (default): take the first backend in preference order that runs successfully.
-        - `benchmark`: time each viable backend (warmup + iterations) and pick the fastest median latency. Configure with env vars:
-                - `UHOP_POLICY_MODE=benchmark`
-                - `UHOP_POLICY_BENCH_WARMUP=1` (warmup runs per backend)
-                - `UHOP_POLICY_BENCH_ITERS=3` (timed iterations)
-                - `UHOP_POLICY_BENCH_EARLY=2.5` (early exit factor for skipping slow candidates quickly)
+- `order_probe` (default): take the first backend in preference order that runs successfully.
+- `benchmark`: time each viable backend (warmup + iterations) and pick the fastest median latency. Configure with env vars:
+  - `UHOP_POLICY_MODE=benchmark`
+  - `UHOP_POLICY_BENCH_WARMUP=1` (warmup runs per backend)
+  - `UHOP_POLICY_BENCH_ITERS=3` (timed iterations)
+  - `UHOP_POLICY_BENCH_EARLY=2.5` (early exit factor for skipping slow candidates quickly)
 
-        CLI override example (without changing env):
+CLI override example (without changing env):
 
-        ```bash
-        uhop policy explain matmul --arg-shape 512x512 --arg-shape 512x512 --iters 3 --warmup 1 --stats --mode benchmark
-        ```
+```bash
+uhop policy explain matmul --arg-shape 512x512 --arg-shape 512x512 --iters 3 --warmup 1 --stats --mode benchmark
+```
 
-        Cache entries now record `policy=order_probe` or `policy=benchmark` for traceability.
+Cache entries now record `policy=order_probe` or `policy=benchmark` for traceability.
 
-        ### KPI Snapshot & CLI (New)
+### KPI Snapshot & CLI (New)
 
-        Capture a point‑in‑time performance + decision summary:
+Capture a point-in-time performance + decision summary:
 
-        ```bash
-        python -m uhop.cli_kpi --show
-        ```
+```bash
+python -m uhop.cli_kpi --show
+```
 
-        Output includes:
-        - Backend selection counts (distribution of cached decisions)
-        - OpenCL matmul rows: shape, kernel variant, latency, GFLOPS
-        - OpenCL Conv2D rows: total latency, stage timings (im2col, GEMM, copy), chunking (whether chunked + chunk count), variance, retune suggestion flag
+Output includes:
 
-        These metrics feed future visualization and retune heuristics.
+- Backend selection counts (distribution of cached decisions)
+- OpenCL matmul rows: shape, kernel variant, latency, GFLOPS
+- OpenCL Conv2D rows: total latency, stage timings (im2col, GEMM, copy), chunking (whether chunked + chunk count), variance, retune suggestion flag
+
+These metrics feed future visualization and retune heuristics.
 
 ---
 

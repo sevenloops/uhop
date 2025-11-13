@@ -169,7 +169,7 @@ class MatmulOp:
         kn = cl.Kernel(prg_obj, "matmul_naive")
         return kn, prg_obj
 
-    def execute(self, A: Any, B: Any) -> MatmulResult:
+    def execute(self, A: Any, B: Any, *, ir: Any | None = None) -> MatmulResult:
         if not is_opencl_available():
             raise RuntimeError("OpenCL unavailable")
         ctx, q = get_ctx_queue()
@@ -180,6 +180,9 @@ class MatmulOp:
         M2, K = B.shape
         assert M == M2, "matmul inner dims mismatch"
         C = _np.zeros((N, K), dtype=_np.float32)
+
+        if ir is not None:
+            return self._execute_ir(ctx, q, A, B, C, ir)
         # Prefer explicit env override; otherwise default to tiled unless naive is forced
         impl_env = os.environ.get("UHOP_OPENCL_MATMUL_IMPL")
         impl = str(impl_env if impl_env else ("naive" if self._force_naive else "tiled")).lower()
@@ -310,6 +313,75 @@ class MatmulOp:
         except Exception:
             gflops = None
         return MatmulResult(C, "naive", ms=dt_ms, gflops=gflops)
+
+    def _execute_ir(self, ctx, q, A: _np.ndarray, B: _np.ndarray, C: _np.ndarray, ir: Any) -> MatmulResult:
+        from ...ir import MatMul, ir_from_dict
+        from ...ir.opencl_lowering import lower_to_opencl
+        from ...ir.registry import IRKernelIndex, compute_ir_key
+        from ..opencl_backend import _get_program
+
+        if cl is None:
+            raise RuntimeError("pyopencl not available for IR execution")
+
+        op = ir_from_dict(ir) if isinstance(ir, dict) else ir
+        if not isinstance(op, MatMul):
+            raise TypeError("IR execution requires a MatMul operation")
+
+        if tuple(op.A.shape) != tuple(A.shape) or tuple(op.B.shape) != tuple(B.shape):
+            raise ValueError("Input arrays do not match IR shapes")
+
+        lowered = lower_to_opencl(op)
+        source = lowered.get("source")
+        if not isinstance(source, str) or not source.strip():
+            raise RuntimeError("IR lowering produced empty source")
+        kernel_name = lowered.get("kernel_name") or "uhop_matmul"
+
+        ir_key = compute_ir_key(op.to_dict())
+        program_key = f"ir::{ir_key}"
+        prg = _get_program(ctx, source, program_key, build_options=None)
+        try:
+            kern = getattr(prg, kernel_name)
+        except AttributeError as exc:  # pragma: no cover - defensive
+            raise RuntimeError(f"Kernel '{kernel_name}' not found in lowered IR program") from exc
+
+        mf = cl.mem_flags
+        a_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=A)
+        b_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=B)
+        c_buf = cl.Buffer(ctx, mf.WRITE_ONLY, size=C.nbytes)
+
+        M = int(A.shape[0])
+        shared_k = int(A.shape[1])
+        N = int(B.shape[1])
+        global_size = (M, N)
+        kern.set_args(_np.int32(M), _np.int32(N), _np.int32(shared_k), a_buf, b_buf, c_buf)
+        evt = cl.enqueue_nd_range_kernel(q, kern, global_size, None)
+        cl.enqueue_copy(q, C, c_buf, wait_for=[evt])
+        q.finish()
+
+        dt = (evt.profile.end - evt.profile.start) * 1e-9 if hasattr(evt, "profile") else 0.0
+        gflops = (2.0 * M * shared_k * N) / (dt * 1e9) if dt > 0 else None
+
+        try:
+            import hashlib
+
+            from ...cache import KernelRegistry as _KR
+
+            dev = ctx.devices[0]
+            dev_name = getattr(dev, "name", "unknown")
+            source_hash = hashlib.sha1((source + "\n").encode("utf-8")).hexdigest()
+            kr = _KR()
+            bin_path = kr.load_opencl_binary(dev_name, source_hash)
+            IRKernelIndex().set(ir_key, dev_name, source_hash, kernel_name=kernel_name, binary_path=bin_path)
+        except Exception:
+            pass
+
+        return MatmulResult(
+            C,
+            "ir",
+            gflops=gflops,
+            ms=dt * 1000.0 if dt > 0 else None,
+            validated_err=0.0,
+        )
 
 
 __all__ = ["MatmulOp", "MatmulResult"]

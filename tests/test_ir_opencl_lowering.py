@@ -70,3 +70,20 @@ def test_lowered_fused_matches_separate():
     cl.enqueue_copy(q, out, bufY)
     q.finish()
     assert np.allclose(out, ref, atol=1e-4)
+
+
+@pytest.mark.skipif(not _has_pyopencl(), reason="pyopencl not available")
+def test_matmul_op_executes_ir_path():
+    from uhop.backends.opencl.matmul import MatmulOp
+    from uhop.ir import MatMul, Tensor
+
+    rng = np.random.default_rng(42)
+    M, K, N = 4, 3, 5
+    A = rng.random((M, K), dtype=np.float32)
+    B = rng.random((K, N), dtype=np.float32)
+    ref = A @ B
+
+    ir = MatMul(A=Tensor("A", (M, K)), B=Tensor("B", (K, N)))
+    result = MatmulOp().execute(A, B, ir=ir)
+    assert result.impl == "ir"
+    assert np.allclose(result.output, ref, atol=1e-4)
