@@ -7,10 +7,7 @@ Supports both chat completion and code generation endpoints.
 import os
 from typing import Optional
 
-import dotenv
 import requests
-
-dotenv.load_dotenv()
 
 
 def _call_deepseek_api(
