@@ -60,7 +60,7 @@ def run_matmul():
     t_uh = bench(matmul_np, A, B, warm=1, iters=3)
     # Naive is too slow; single iteration is enough
     t_naive = bench(matmul_naive, A, B, warm=0, iters=1)
-    print(f"MatMul UHOP: {t_uh:.4f} s | Naive: {t_naive:.4f} s | x{(t_naive/max(t_uh,1e-9)):.1f}")
+    print(f"MatMul UHOP: {t_uh:.4f} s | Naive: {t_naive:.4f} s | x{(t_naive/max(t_uh, 1e-9)):.1f}")
     assert t_naive / max(t_uh, 1e-9) > 1.5, "UHOP should be >1.5x faster than naive"
 
 
@@ -78,7 +78,7 @@ def run_relu():
     _ = relu_np(X)
     t_uh = bench(relu_np, X, warm=1, iters=3)
     t_naive = bench(relu_naive, X, warm=0, iters=1)
-    print(f"ReLU  UHOP: {t_uh:.4f} s | Naive: {t_naive:.4f} s | x{(t_naive/max(t_uh,1e-9)):.1f}")
+    print(f"ReLU  UHOP: {t_uh:.4f} s | Naive: {t_naive:.4f} s | x{(t_naive/max(t_uh, 1e-9)):.1f}")
     assert t_naive / max(t_uh, 1e-9) > 1.5, "UHOP should be >1.5x faster than naive"
 
 
@@ -117,7 +117,7 @@ def run_conv2d():
     _ = conv2d_uhop(x, w)
     t_uh = bench(conv2d_uhop, x, w, warm=1, iters=3)
     t_naive = bench(lambda a, b: conv2d_naive(a, b, 1, 1), x, w, warm=0, iters=1)
-    print(f"Conv2D UHOP: {t_uh:.4f} s | Naive: {t_naive:.4f} s | x{(t_naive/max(t_uh,1e-9)):.1f}")
+    print(f"Conv2D UHOP: {t_uh:.4f} s | Naive: {t_naive:.4f} s | x{(t_naive/max(t_uh, 1e-9)):.1f}")
     assert t_naive / max(t_uh, 1e-9) > 1.5, "UHOP should be >1.5x faster than naive"
 
 

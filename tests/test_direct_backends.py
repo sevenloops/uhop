@@ -41,7 +41,7 @@ def benchmark_direct_backends(size=1024, iters=10):
         torch.cuda.synchronize()
 
         times = []
-        for i in range(iters):
+        for _ in range(iters):
             start = time.perf_counter()
             _ = torch.matmul(a_torch, b_torch)
             torch.cuda.synchronize()
@@ -63,7 +63,7 @@ def benchmark_direct_backends(size=1024, iters=10):
         torch.cuda.synchronize()
 
         times = []
-        for i in range(iters):
+        for _ in range(iters):
             start = time.perf_counter()
             _ = torch_matmul(a_np, b_np)
             times.append(time.perf_counter() - start)
@@ -92,7 +92,7 @@ def benchmark_direct_backends(size=1024, iters=10):
         torch.cuda.synchronize()
 
         times = []
-        for i in range(iters):
+        for _ in range(iters):
             start = time.perf_counter()
             _ = torch_matmul(a_torch, b_torch)
             torch.cuda.synchronize()
@@ -115,7 +115,7 @@ def benchmark_direct_backends(size=1024, iters=10):
             torch.cuda.synchronize()
 
         times = []
-        for i in range(iters):
+        for _ in range(iters):
             start = time.perf_counter()
             _ = opencl_matmul(a_np, b_np)
             if torch.cuda.is_available():
@@ -141,7 +141,7 @@ def benchmark_direct_backends(size=1024, iters=10):
             torch.cuda.synchronize()
 
         times = []
-        for i in range(iters):
+        for _ in range(iters):
             start = time.perf_counter()
             _ = triton_matmul(a_np, b_np)
             if torch.cuda.is_available():
@@ -160,7 +160,7 @@ def benchmark_direct_backends(size=1024, iters=10):
     # Test 6: NumPy CPU baseline
     print("6. NumPy CPU baseline")
     times = []
-    for i in range(min(3, iters)):
+    for _ in range(min(3, iters)):
         start = time.perf_counter()
         _ = np.matmul(a_np, b_np)
         times.append(time.perf_counter() - start)

@@ -9,11 +9,11 @@ import os  # noqa: F401
 import time
 from pathlib import Path  # noqa: F401
 from typing import Any, Callable, Dict, List, Optional, Tuple  # noqa: F401
+
 import numpy as np
 
-from ..validation import validate_callable, gen_cases
 from ..hardware import detect_hardware
-
+from ..validation import gen_cases, validate_callable
 
 try:
     import pyopencl as cl  # type: ignore

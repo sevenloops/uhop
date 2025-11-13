@@ -16,7 +16,7 @@ import os
 import re
 import textwrap
 import time
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -26,7 +26,6 @@ from ..validation import ValidationResult
 from .compiler import KernelValidator
 from .generator import AICodegen
 from .prompt_templates import PROMPTS
-
 
 FALLBACK_OPENCL_MATMUL = textwrap.dedent(
     """
@@ -237,9 +236,7 @@ class AIGenerationPipeline:
             "deepseek": AICodegen(model=os.environ.get("UHOP_DEEPSEEK_MODEL", "deepseek-coder")),
         }
 
-        self.default_provider = (
-            (default_provider or os.environ.get("UHOP_AI_PROVIDER", "openai")).lower()
-        )
+        self.default_provider = (default_provider or os.environ.get("UHOP_AI_PROVIDER", "openai")).lower()
         if self.default_provider not in SUPPORTED_PROVIDERS:
             self.default_provider = "openai"
 
@@ -305,7 +302,11 @@ class AIGenerationPipeline:
             lines.append(f"Constraints: {spec.constraints}")
 
         if prior_attempts:
-            failures = [a for a in prior_attempts if not a.compile_success or not (a.validation_result and a.validation_result.ok)]
+            failures = [
+                a
+                for a in prior_attempts
+                if not a.compile_success or not (a.validation_result and a.validation_result.ok)
+            ]
             if failures:
                 recent = failures[-2:]
                 formatted = []
@@ -493,11 +494,7 @@ class AIGenerationPipeline:
             max_abs_err=float(result.get("max_abs_error", 0.0) or 0.0),
             max_rel_err=float(result.get("max_rel_error", 0.0) or 0.0),
             case_index=None,
-            message=(
-                "ok"
-                if validation_success
-                else "; ".join(result.get("errors", [])) or "validation failed"
-            ),
+            message=("ok" if validation_success else "; ".join(result.get("errors", [])) or "validation failed"),
         )
 
         if compile_success and validation_success:
@@ -703,7 +700,11 @@ def run_ai_generation_loop() -> List[GenerationAttempt]:
 
     print(f"Generated {len(attempts)} attempts")
     for idx, attempt in enumerate(attempts, 1):
-        status = "SUCCESS" if attempt.compile_success and attempt.validation_result and attempt.validation_result.ok else "FAILED"
+        status = (
+            "SUCCESS"
+            if attempt.compile_success and attempt.validation_result and attempt.validation_result.ok
+            else "FAILED"
+        )
         print(f"Attempt {idx}: {status} (provider={attempt.provider}, retries={attempt.retry_count})")
 
     return attempts

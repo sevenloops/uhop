@@ -9,7 +9,6 @@ If no filters are provided, prints all entries.
 """
 import argparse
 import json
-from pathlib import Path
 
 from uhop.cache import UhopAutotune
 

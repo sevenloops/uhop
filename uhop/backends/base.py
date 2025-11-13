@@ -279,12 +279,9 @@ class Backend(ABC):
             "source": kernel_info.source.value,
         }
 
-    def _synchronize(self):
-        """
-        Synchronize device execution (backend-specific).
-        Override in subclasses for GPU backends.
-        """
-        pass
+    def _synchronize(self) -> None:
+        """Synchronize device execution when a backend needs it."""
+        return None
 
     def get_device_info(self) -> Dict[str, Any]:
         """Get detailed device information."""

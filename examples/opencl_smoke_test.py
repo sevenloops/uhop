@@ -8,8 +8,8 @@ import numpy as np
 
 try:
     import pyopencl as cl
-except Exception as e:
-    raise SystemExit("pyopencl not available: install pyopencl to run this smoke test")
+except Exception as exc:
+    raise SystemExit(f"pyopencl not available: {exc}")
 
 from pathlib import Path
 

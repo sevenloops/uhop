@@ -12,10 +12,7 @@ import pytest
 # Ensure modules resolve when running from the project root.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from uhop.ai_codegen.pipeline import (  # noqa: E402
-    AIGenerationPipeline,
-    StaticAnalyzer,
-)
+from uhop.ai_codegen.pipeline import AIGenerationPipeline, StaticAnalyzer  # noqa: E402
 from uhop.ir import MatMul, Tensor  # noqa: E402
 
 
@@ -43,9 +40,7 @@ def matmul_ir() -> MatMul:
 
 
 @pytest.fixture(scope="module")
-def pipeline_attempts(
-    pipeline: AIGenerationPipeline, matmul_ir: MatMul
-) -> List:
+def pipeline_attempts(pipeline: AIGenerationPipeline, matmul_ir: MatMul) -> List:
     """Run the pipeline once and memoize the attempts for reuse."""
 
     attempts = pipeline.run_pipeline(matmul_ir, max_attempts=2)
@@ -115,11 +110,7 @@ def test_pipeline_attempt_contains_validation(pipeline_attempts) -> None:
 def test_attempt_feedback_is_string(pipeline_attempts) -> None:
     """Corrective feedback should be a descriptive string when present."""
 
-    feedback_values = {
-        attempt.corrective_feedback
-        for attempt in pipeline_attempts
-        if attempt.corrective_feedback
-    }
+    feedback_values = {attempt.corrective_feedback for attempt in pipeline_attempts if attempt.corrective_feedback}
     for feedback in feedback_values:
         assert isinstance(feedback, str)
         assert feedback  # non-empty
@@ -156,9 +147,5 @@ def test_dataset_query_counts(dataset_dir: Path, pipeline_attempts) -> None:
 
     assert attempts, "persisted dataset should contain entries"
 
-    successful = [
-        a
-        for a in attempts
-        if a.get("compile_success") and a.get("validation_result", {}).get("ok")
-    ]
+    successful = [a for a in attempts if a.get("compile_success") and a.get("validation_result", {}).get("ok")]
     assert len(successful) == len(attempts)

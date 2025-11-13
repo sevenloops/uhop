@@ -40,7 +40,7 @@ def demo_with_mock_kernel():
                                   __global float* C) {
         int i = get_global_id(0);
         int j = get_global_id(1);
-        
+
         if (i < M && j < N) {
             float sum = 0.0f;
             for (int k = 0; k < K; k++) {
@@ -99,7 +99,7 @@ def demo_static_analysis():
                                   __global float* C) {
             int i = get_global_id(0);
             int j = get_global_id(1);
-           
+
             if (i < M && j < N) {
                 float sum = 0.0f;
                 for (int k = 0; k < K; k++) {
@@ -116,26 +116,26 @@ def demo_static_analysis():
                                       __global float* C) {
             __local float tileA[16][16];
             __local float tileB[16][16];
-            
+
             int row = get_local_id(0);
             int col = get_local_id(1);
             int globalRow = get_global_id(0);
             int globalCol = get_global_id(1);
-            
+
             float sum = 0.0f;
             for (int t = 0; t < K/16; t++) {
                 // Load tiles into local memory
                 tileA[row][col] = A[globalRow * K + t*16 + col];
                 tileB[row][col] = B[(t*16 + row) * N + globalCol];
                 barrier(CLK_LOCAL_MEM_FENCE);
-                
+
                 // Compute partial sum
                 for (int k = 0; k < 16; k++) {
                     sum += tileA[row][k] * tileB[k][col];
                 }
                 barrier(CLK_LOCAL_MEM_FENCE);
             }
-            
+
             if (globalRow < M && globalCol < N) {
                 C[globalRow * N + globalCol] = sum;
             }
@@ -148,7 +148,7 @@ def demo_static_analysis():
                                    __global float* C) {
             int i = get_global_id(0);
             int j = get_global_id(1);
-            
+
             if (i < M && j < N) {
                 float4 sum = (float4)(0.0f, 0.0f, 0.0f, 0.0f);
                 for (int k = 0; k < K; k += 4) {

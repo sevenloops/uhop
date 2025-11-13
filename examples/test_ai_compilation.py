@@ -29,7 +29,7 @@ def test_kernel_validation():
                                 __global float* C) {
         int i = get_global_id(0);
         int j = get_global_id(1);
-        
+
         if (i < M && j < N) {
             float sum = 0.0f;
             for (int k = 0; k < K; k++) {
@@ -76,7 +76,7 @@ def test_invalid_kernel():
                                 __global float* C) {
         int i = get_global_id(0);
         int j = get_global_id(1);
-        
+
         if (i < M && j < N) {
             float sum = 0.0f;
             for (int k = 0; k < K; k++) {
@@ -117,7 +117,7 @@ def test_performance_comparison():
                               __global float* C) {
         int i = get_global_id(0);
         int j = get_global_id(1);
-        
+
         if (i < M && j < N) {
             float sum = 0.0f;
             for (int k = 0; k < K; k++) {
@@ -136,7 +136,7 @@ def test_performance_comparison():
                               __global float* C) {
         int row = get_global_id(0);
         int col = get_global_id(1);
-        
+
         if (row < M && col < N) {
             float sum = 0.0f;
             for (int k = 0; k < K; k++) {

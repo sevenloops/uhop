@@ -234,7 +234,6 @@ def _validate(params: Dict[str, Any]) -> Dict[str, Any]:
     # IR path validation (OpenCL execution)
     if ir_desc:
         try:
-            import numpy as np
             import pyopencl as cl  # type: ignore
 
             from .ir import ir_from_dict  # type: ignore

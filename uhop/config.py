@@ -220,7 +220,7 @@ def get(name: str) -> Any:
 
 def as_dict(include_unset: bool = False) -> Dict[str, Any]:
     data = {}
-    for k, meta in _REGISTRY.items():
+    for k, _meta in _REGISTRY.items():
         raw = os.environ.get(k)
         if raw is None and not include_unset:
             continue
@@ -230,15 +230,15 @@ def as_dict(include_unset: bool = False) -> Dict[str, Any]:
 
 def describe() -> List[Dict[str, Any]]:
     info = []
-    for meta in _REGISTRY.values():
+    for _meta in _REGISTRY.values():
         info.append(
             {
-                "name": meta.name,
-                "category": meta.category,
-                "default": meta.default,
-                "current": get(meta.name),
-                "description": meta.description,
-                "choices": meta.choices or [],
+                "name": _meta.name,
+                "category": _meta.category,
+                "default": _meta.default,
+                "current": get(_meta.name),
+                "description": _meta.description,
+                "choices": _meta.choices or [],
             }
         )
     return sorted(info, key=lambda x: (x["category"], x["name"]))

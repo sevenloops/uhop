@@ -176,9 +176,11 @@ python -m uhop.cli_ai query --operation matmul
 ### Common Issues
 
 1. **API Key Missing**
+
    - Set `OPENAI_API_KEY` or `DEEPSEEK_API_KEY` environment variables
 
 2. **Generation Failures**
+
    - Check API rate limits and quotas
    - Verify model names are correct
    - Enable debug logging with `UHOP_AI_DEBUG=1`

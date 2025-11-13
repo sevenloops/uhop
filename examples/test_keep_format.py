@@ -18,7 +18,7 @@ from uhop import UHopOptimizer
 
 print("=" * 70)
 print("UHOP keep_format Feature Demonstration")
-print("=" * 70)
+print("  Conversions: numpy → torch → numpy → torch → numpy")
 print()
 
 # Test 1: Default behavior (auto-convert)
@@ -85,7 +85,7 @@ print()
 start = time.perf_counter()
 C4 = matmul_keep(A_torch, B_torch)
 time_keep_torch = (time.perf_counter() - start) * 1000
-
+print("  ✓ All operations stayed on GPU (no conversions!)")
 print(f"Torch input → Torch output:   {time_keep_torch:.2f} ms")
 print(f"  Input type:  {type(A_torch).__name__}")
 print(f"  Output type: {type(C4).__name__}")
@@ -113,7 +113,7 @@ result_default = chain_default(A_np, B_np, C_np)
 time_chain_default = (time.perf_counter() - start) * 1000
 
 print(f"  Time: {time_chain_default:.2f} ms")
-print(f"  Conversions: numpy → torch → numpy → torch → numpy")
+print("  Conversions: numpy → torch → numpy → torch → numpy")
 print()
 
 # With keep_format: numpy → torch (once) → torch → torch (stay on GPU!)
@@ -132,7 +132,7 @@ result_keep = chain_keep(A_np, B_np, C_np)
 time_chain_keep = (time.perf_counter() - start) * 1000
 
 print(f"  Time: {time_chain_keep:.2f} ms")
-print(f"  Conversions: numpy → torch (then GPU operations only)")
+print("  Conversions: numpy → torch (then GPU operations only)")
 print(f"  Speedup: {time_chain_default / time_chain_keep:.2f}x faster!")
 print()
 
@@ -180,11 +180,11 @@ for _ in range(10):
     output = model(x_input)
 time_pytorch = (time.perf_counter() - start) * 1000 / 10
 
-print(f"PyTorch model with UHOP (keep_format=True):")
+print("PyTorch model with UHOP (keep_format=True):")
 print(f"  Forward pass: {time_pytorch:.2f} ms")
 print(f"  Output shape: {output.shape}")
 print(f"  Output type: {type(output).__name__}")
-print(f"  ✓ All operations stayed on GPU (no conversions!)")
+print("  ✓ All operations stayed on GPU (no conversions!)")
 print()
 
 # Summary

@@ -5,9 +5,10 @@ Supports both chat completion and code generation endpoints.
 """
 
 import os
-import requests
 from typing import Optional
+
 import dotenv
+import requests
 
 dotenv.load_dotenv()
 
@@ -227,7 +228,11 @@ def update_generator_with_deepseek():
                 "Ensure API key is valid and the model name is correct."
             )
 
-        from .generator import _extract_code_blocks, _verify_syntax_python, GENERATED_DIR
+        from .generator import (
+            GENERATED_DIR,
+            _extract_code_blocks,
+            _verify_syntax_python,
+        )
 
         blocks = _extract_code_blocks(text)
         if not blocks:

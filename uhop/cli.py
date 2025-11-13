@@ -1534,7 +1534,7 @@ def policy_explain(
     console.print(f"[bold cyan]Policy Explain[/bold cyan] op={operation}")
     console.print(f"Preference order: {', '.join(explain['order'])}")
     for cand in explain["candidates"]:
-        status = "OK" if cand["ok"] else f"skip ({cand.get('error','')})"
+        status = "OK" if cand["ok"] else f"skip ({cand.get('error', '')})"
         lat = f"{cand['latency_ms']:.3f} ms" if cand["latency_ms"] else "-"
         console.print(f" - {cand['name']:<7} {status:<18} {lat}")
         if collect_stats and cand.get("stats"):
@@ -1577,7 +1577,7 @@ def policy_explain(
     "device_query",
     type=str,
     default=None,
-    help=("Substring filter to remove entries for a device (e.g. 'mps', 'cuda'," " vendor name). Case-insensitive."),
+    help=("Substring filter to remove entries for a device (e.g. 'mps', 'cuda', vendor name). Case-insensitive."),
 )
 @click.option(
     "--backend",
