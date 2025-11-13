@@ -1,0 +1,48 @@
+# Workflow to automatically close duplicate issues
+# This uses GitHub Actions and the "actions/github-script" action to find and close issues with duplicate titles.
+# Place this file in .github/workflows/close-duplicate-issues.yml
+
+name: Close Duplicate Issues
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  close-duplicates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find and close duplicate issues
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issueTitle = context.payload.issue.title.trim().toLowerCase();
+            const issueNumber = context.payload.issue.number;
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100
+            });
+            for (const issue of issues) {
+              if (
+                issue.number !== issueNumber &&
+                issue.title.trim().toLowerCase() === issueTitle
+              ) {
+                // Close the duplicate
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  state: 'closed'
+                });
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: `Closed as duplicate of #${issue.number}`
+                });
+                break;
+              }
+            }
