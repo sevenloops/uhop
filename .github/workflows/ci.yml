@@ -12,6 +12,10 @@ jobs:
     name: Python lint & tests
     runs-on: ubuntu-latest
     steps:
+      - name: Install OpenCL CPU runtime (pocl)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ocl-icd-libopencl1 pocl-opencl-icd
       - name: Checkout
         uses: actions/checkout@v4
       - name: Set up Python
