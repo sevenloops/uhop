@@ -24,14 +24,14 @@ Support for different memory hierarchies:
 
 ```python
 from uhop.ir.ir_enhanced import (
-    MEMORY_SPACE_GLOBAL, MEMORY_SPACE_LOCAL, 
+    MEMORY_SPACE_GLOBAL, MEMORY_SPACE_LOCAL,
     MEMORY_SPACE_CONSTANT, MEMORY_SPACE_PRIVATE
 )
 
 # Usage in tensors
 tensor = Tensor(
-    name="weights", 
-    shape=(64, 64), 
+    name="weights",
+    shape=(64, 64),
     memory_space=MEMORY_SPACE_CONSTANT
 )
 ```
@@ -48,8 +48,8 @@ from uhop.ir.ir import (
 
 # Image data with NCHW layout
 image_tensor = Tensor(
-    name="input", 
-    shape=(1, 3, 224, 224), 
+    name="input",
+    shape=(1, 3, 224, 224),
     layout=LAYOUT_NCHW
 )
 ```
@@ -60,8 +60,8 @@ Explicit stride information for advanced memory access patterns:
 
 ```python
 tensor = Tensor(
-    name="strided", 
-    shape=(32, 32), 
+    name="strided",
+    shape=(32, 32),
     strides=(1024, 32)  # Custom memory layout
 )
 ```
@@ -73,7 +73,7 @@ Additional scheduling parameters for optimization:
 ```python
 schedule = Schedule(
     tile_m=16,
-    tile_n=16, 
+    tile_n=16,
     tile_k=8,
     vectorize=4,
     unroll=2  # New parameter
@@ -212,6 +212,6 @@ from uhop.ir.ir import Tensor, compute_stable_hash  # Enhanced version
 
 ---
 
-**Version**: 0.1.0  
-**Status**: Complete  
+**Version**: 0.1.0
+**Status**: Complete
 **Compatibility**: Full backward compatibility

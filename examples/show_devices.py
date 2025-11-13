@@ -41,6 +41,7 @@ try:
             print(f"    Device {di}: {d.name} [{kind}]")
     # Query availability through public facade only (internal sentinel removed)
     from uhop.backends import is_opencl_available
+
     print("is_opencl_available():", is_opencl_available())
 except Exception as e:
     print("OpenCL error:", e)

@@ -5,6 +5,7 @@ Supports:
 - Tiled conv2d
 - im2col + CLBlast GEMM path
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,12 +18,12 @@ try:
 except Exception:  # pragma: no cover
     cl = None  # type: ignore
 
-from .context import get_ctx_queue, is_opencl_available
-from .autotune import OCLAutotune
-from .clblast import load_clblast_safe, current_device_name
 from ... import config as _cfg
 from ...cache import OPENCL_BUFFER_POOL
 from ...utils.logging import get_logger as _get_logger
+from .autotune import OCLAutotune
+from .clblast import current_device_name, load_clblast_safe
+from .context import get_ctx_queue, is_opencl_available
 
 _log = _get_logger("uhop.opencl.conv2d")
 
@@ -40,7 +41,9 @@ class Conv2DOp:
     def __init__(self) -> None:
         self.auto = OCLAutotune()
 
-    def execute(self, input_np: Any, weight_np: Any, stride: int = 1, padding: int = 0, fuse_relu: bool = False) -> Conv2DResult:
+    def execute(
+        self, input_np: Any, weight_np: Any, stride: int = 1, padding: int = 0, fuse_relu: bool = False
+    ) -> Conv2DResult:
         if not is_opencl_available():
             raise RuntimeError("OpenCL unavailable")
         ctx, q = get_ctx_queue()
@@ -57,6 +60,7 @@ class Conv2DOp:
         if stride == 1 and padding == 0 and N == 1 and fuse_relu:
             # Borrow helpers from legacy backend for kernel source and building
             from ..opencl_backend import _load_conv2d_relu_kernel_source
+
             src = _load_conv2d_relu_kernel_source()
             prg = cl.Program(ctx, src).build()
             mf = cl.mem_flags
@@ -104,17 +108,24 @@ class Conv2DOp:
             out[0] = out0
             # Record profiling if available
             try:
-                dt_ms = (evt.profile.end - evt.profile.start) * 1e-6 if hasattr(evt, 'profile') else 0.0
+                dt_ms = (evt.profile.end - evt.profile.start) * 1e-6 if hasattr(evt, "profile") else 0.0
                 gflops = None
                 if dt_ms > 0:
                     # Approx FLOPs: N*outH*outW*Cout*Cin*KH*KW*2
                     flops = N * outH * outW * Cout * Cin * KH * KW * 2.0
                     gflops = flops / (dt_ms * 1e6)
-                self.auto.record_profile("opencl","conv2d","conv2d_fused",dev_name,shape_key,gflops or 0.0,dt_ms)
-                self.auto.set_params("opencl","conv2d","conv2d_fused",dev_name,shape_key,{"tuned_at": float(evt.profile.end) if hasattr(evt,'profile') else None})
+                self.auto.record_profile("opencl", "conv2d", "conv2d_fused", dev_name, shape_key, gflops or 0.0, dt_ms)
+                self.auto.set_params(
+                    "opencl",
+                    "conv2d",
+                    "conv2d_fused",
+                    dev_name,
+                    shape_key,
+                    {"tuned_at": float(evt.profile.end) if hasattr(evt, "profile") else None},
+                )
             except Exception:
                 pass
-            return Conv2DResult(out, "fused", ms=dt_ms if 'dt_ms' in locals() else None)
+            return Conv2DResult(out, "fused", ms=dt_ms if "dt_ms" in locals() else None)
 
         # Decide implementation
         impl = str((_cfg.get("UHOP_OPENCL_CONV_IMPL") or "auto")).lower()
@@ -169,16 +180,18 @@ class Conv2DOp:
                 prg = cl.Program(ctx, src).build()
                 kn = cl.Kernel(prg, "im2col_batched")
                 out = _np.zeros((N, Cout, outH, outW), dtype=_np.float32)
-                from ..clblast_integration import sgemm as _clblast_sgemm  # type: ignore
+                from ..clblast_integration import (
+                    sgemm as _clblast_sgemm,  # type: ignore
+                )
 
                 ksz = int(C * KH * KW)
                 # Choose a safe local size for im2col kernel by quick probe on first batch
                 best_lsz = None
                 try:
-                    lsz_cands = [(8,8,1), (16,4,1), (4,16,1), None]
+                    lsz_cands = [(8, 8, 1), (16, 4, 1), (4, 16, 1), None]
                     # Reduce candidate set for extreme stride/padding
                     if stride > 2 or padding > max(KH, KW) // 2:
-                        lsz_cands = [(8,8,1), None]
+                        lsz_cands = [(8, 8, 1), None]
                     cols_size_probe = int(ksz * outH * outW * 4)
                     cols_buf_probe = OPENCL_BUFFER_POOL.get(ctx, cols_size_probe, mf.READ_WRITE)
                     gsz_probe = (int(outW), int(outH), int(ksz))
@@ -203,7 +216,11 @@ class Conv2DOp:
                         try:
                             evt_probe = cl.enqueue_nd_range_kernel(q, kn, gsz_probe, lsz)
                             evt_probe.wait()
-                            t = (evt_probe.profile.end - evt_probe.profile.start) * 1e-9 if hasattr(evt_probe, 'profile') else 0.0
+                            t = (
+                                (evt_probe.profile.end - evt_probe.profile.start) * 1e-9
+                                if hasattr(evt_probe, "profile")
+                                else 0.0
+                            )
                         except Exception:
                             t = 1e30
                         if 0 < t < best_t:
@@ -245,6 +262,7 @@ class Conv2DOp:
                         co_step = 1
                     # GEMM timing aggregates
                     import time as _time
+
                     gemm_ms_total = 0.0
                     gemm_ms_min = None
                     gemm_ms_max = None
@@ -326,7 +344,7 @@ class Conv2DOp:
                             # Copy this chunk back and place into tmp slice
                             host_chunk = _np.empty((m_chunk, outH * outW), dtype=_np.float32)
                             cl.enqueue_copy(q, host_chunk, c_chunk_buf)
-                            tmp[co0:co0 + m_chunk] = host_chunk.reshape(m_chunk, outH, outW)
+                            tmp[co0 : co0 + m_chunk] = host_chunk.reshape(m_chunk, outH, outW)
                         evt_copy = None
                     out[b_idx] = tmp
                 q.finish()
@@ -337,14 +355,22 @@ class Conv2DOp:
                     try:
                         dt_ms = 0.0
                         try:
-                            dt_ms = (evt_col.profile.end - evt_col.profile.start) * 1e-6 if hasattr(evt_col, 'profile') else 0.0
+                            dt_ms = (
+                                (evt_col.profile.end - evt_col.profile.start) * 1e-6
+                                if hasattr(evt_col, "profile")
+                                else 0.0
+                            )
                         except Exception:
                             dt_ms = 0.0
                         # GEMM timing: prefer aggregated gemm_ms_total if measured via CPU timer in chunking path
-                        gemm_ms = gemm_ms_total if 'gemm_ms_total' in locals() and gemm_ms_total > 0 else None
+                        gemm_ms = gemm_ms_total if "gemm_ms_total" in locals() and gemm_ms_total > 0 else None
                         copy_ms = None
                         try:
-                            copy_ms = (evt_copy.profile.end - evt_copy.profile.start) * 1e-6 if hasattr(evt_copy, 'profile') else None
+                            copy_ms = (
+                                (evt_copy.profile.end - evt_copy.profile.start) * 1e-6
+                                if hasattr(evt_copy, "profile")
+                                else None
+                            )
                         except Exception:
                             copy_ms = None
                         # Compute aggregate GFLOPS based on im2col+gemm total if gemm_ms known, else use im2col dt
@@ -353,10 +379,26 @@ class Conv2DOp:
                         if total_ms_for_gflops > 0:
                             flops = N * outH * outW * Cout * Cin * KH * KW * 2.0
                             gflops = flops / (total_ms_for_gflops * 1e6)
-                        self.auto.record_profile("opencl","conv2d","conv2d_im2col",dev_name,shape_key,gflops or 0.0,total_ms_for_gflops)
+                        self.auto.record_profile(
+                            "opencl", "conv2d", "conv2d_im2col", dev_name, shape_key, gflops or 0.0, total_ms_for_gflops
+                        )
                         self.auto.set_params(
-                            "opencl","conv2d","conv2d_im2col",dev_name,shape_key,
-                            {"tuned_at": None, "im2col_ms": dt_ms, "gemm_ms": gemm_ms, "copy_ms": copy_ms, "lsz": list(best_lsz) if isinstance(best_lsz, tuple) else None, "chunked": bool(chunked), "chunk_count": int((int(Cout)+co_step-1)//co_step) if chunked else 1, "gemm_ms_min": float(gemm_ms_min) if gemm_ms_min is not None else None, "gemm_ms_max": float(gemm_ms_max) if gemm_ms_max is not None else None}
+                            "opencl",
+                            "conv2d",
+                            "conv2d_im2col",
+                            dev_name,
+                            shape_key,
+                            {
+                                "tuned_at": None,
+                                "im2col_ms": dt_ms,
+                                "gemm_ms": gemm_ms,
+                                "copy_ms": copy_ms,
+                                "lsz": list(best_lsz) if isinstance(best_lsz, tuple) else None,
+                                "chunked": bool(chunked),
+                                "chunk_count": int((int(Cout) + co_step - 1) // co_step) if chunked else 1,
+                                "gemm_ms_min": float(gemm_ms_min) if gemm_ms_min is not None else None,
+                                "gemm_ms_max": float(gemm_ms_max) if gemm_ms_max is not None else None,
+                            },
                         )
                     except Exception:
                         pass
@@ -378,17 +420,17 @@ class Conv2DOp:
         try:
             raw = _cfg.get("UHOP_OPENCL_VEC_CANDIDATES") or [1]
             if isinstance(raw, str):
-                vec_cands = [int(v.strip()) for v in raw.split(',') if v.strip()]
+                vec_cands = [int(v.strip()) for v in raw.split(",") if v.strip()]
             else:
                 vec_cands = [int(v) for v in raw]
-            vec_cands = [v for v in vec_cands if v in (1,2,4,8)] or [1]
+            vec_cands = [v for v in vec_cands if v in (1, 2, 4, 8)] or [1]
         except Exception:
             vec_cands = [1]
-        base_tiles = [(8,8,1), (16,8,1), (8,16,1), (16,16,1)]
+        base_tiles = [(8, 8, 1), (16, 8, 1), (8, 16, 1), (16, 16, 1)]
         # TODO: apply perf heuristic using device metadata (local mem / compute units)
         best = None
         best_t = 1e30
-        for (tx,ty,tz) in base_tiles:
+        for tx, ty, tz in base_tiles:
             for vec in vec_cands:
                 try:
                     prg = cl.Program(ctx, src_conv).build(options=f"-D TILE_W={tx} -D TILE_H={ty} -D VEC={vec}")
@@ -428,17 +470,17 @@ class Conv2DOp:
                     cl.LocalMemory(tile_w_bytes),
                 )
                 try:
-                    evt = cl.enqueue_nd_range_kernel(q, kn, gsz, (tx,ty,tz))
+                    evt = cl.enqueue_nd_range_kernel(q, kn, gsz, (tx, ty, tz))
                     evt.wait()
                     dt = (evt.profile.end - evt.profile.start) * 1e-9
                 except Exception:
                     dt = 1e9
                 if dt < best_t:
                     best_t = dt
-                    best = (tx,ty,tz,vec,gsz,tile_in_bytes,tile_w_bytes)
+                    best = (tx, ty, tz, vec, gsz, tile_in_bytes, tile_w_bytes)
         if best is None:
             raise RuntimeError("Failed to compile tiled conv2d candidates")
-        tx,ty,tz,vec, gsz, tile_in_bytes, tile_w_bytes = best
+        tx, ty, tz, vec, gsz, tile_in_bytes, tile_w_bytes = best
         prg = cl.Program(ctx, src_conv).build(options=f"-D TILE_W={tx} -D TILE_H={ty} -D VEC={vec}")
         kn = cl.Kernel(prg, "conv2d_tiled")
         kn.set_args(
@@ -459,23 +501,35 @@ class Conv2DOp:
             cl.LocalMemory(int(tile_in_bytes)),
             cl.LocalMemory(int(tile_w_bytes)),
         )
-        evt = cl.enqueue_nd_range_kernel(q, kn, gsz, (tx,ty,tz))
+        evt = cl.enqueue_nd_range_kernel(q, kn, gsz, (tx, ty, tz))
         cl.enqueue_copy(q, out, out_buf, wait_for=[evt])
         q.finish()
         # Profiling record
         try:
-            dt_ms = (evt.profile.end - evt.profile.start) * 1e-6 if hasattr(evt,'profile') else 0.0
+            dt_ms = (evt.profile.end - evt.profile.start) * 1e-6 if hasattr(evt, "profile") else 0.0
             gflops = None
             if dt_ms > 0:
                 flops = N * outH * outW * Cout * Cin * KH * KW * 2.0
                 gflops = flops / (dt_ms * 1e6)
-            self.auto.record_profile("opencl","conv2d","conv2d_tiled",dev_name,shape_key,gflops or 0.0,dt_ms)
-            self.auto.set_params("opencl","conv2d","conv2d_tiled",dev_name,shape_key,{"tile_w": tx, "tile_h": ty, "vec": vec, "tuned_at": float(evt.profile.end) if hasattr(evt,'profile') else None})
+            self.auto.record_profile("opencl", "conv2d", "conv2d_tiled", dev_name, shape_key, gflops or 0.0, dt_ms)
+            self.auto.set_params(
+                "opencl",
+                "conv2d",
+                "conv2d_tiled",
+                dev_name,
+                shape_key,
+                {
+                    "tile_w": tx,
+                    "tile_h": ty,
+                    "vec": vec,
+                    "tuned_at": float(evt.profile.end) if hasattr(evt, "profile") else None,
+                },
+            )
         except Exception:
             pass
         if fuse_relu:
             out = _np.maximum(out, 0)
-        return Conv2DResult(out, "tiled", ms=dt_ms if 'dt_ms' in locals() else None)
+        return Conv2DResult(out, "tiled", ms=dt_ms if "dt_ms" in locals() else None)
 
 
 __all__ = ["Conv2DOp", "Conv2DResult"]

@@ -585,14 +585,14 @@ export default function Portal() {
                         </tr>
                       </thead>
                       <tbody>
-                        {Object.entries(
-                          kpi.backend_selection_counts ?? {},
-                        ).map(([b, c]: [string, number]) => (
+                        {Object.entries(kpi.backend_selection_counts ?? {}).map(
+                          ([b, c]: [string, number]) => (
                             <tr key={b}>
                               <td className="py-1 pr-4">{b}</td>
                               <td className="py-1">{String(c)}</td>
                             </tr>
-                        ))}
+                          ),
+                        )}
                       </tbody>
                     </table>
                   </div>

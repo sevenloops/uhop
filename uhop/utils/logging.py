@@ -11,7 +11,6 @@ except Exception:  # pragma: no cover
 
 from .. import config as _cfg
 
-
 _LOGGER_CREATED: dict[str, logging.Logger] = {}
 
 

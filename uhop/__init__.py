@@ -16,6 +16,7 @@ __all__ = [
     "UhopCache",
     "ops_registry",
     "autotuner",
+    "ai_codegen",
 ]
 
 
@@ -54,4 +55,9 @@ def __getattr__(name: str) -> Any:  # lazy attribute loader
         _autotuner = importlib.import_module(__name__ + ".autotuner")
         globals()["autotuner"] = _autotuner
         return _autotuner
+
+    if name == "ai_codegen":
+        _ai_codegen = importlib.import_module(__name__ + ".ai_codegen")
+        globals()["ai_codegen"] = _ai_codegen
+        return _ai_codegen
     raise AttributeError(f"module 'uhop' has no attribute {name!r}")

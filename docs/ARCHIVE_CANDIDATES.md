@@ -14,6 +14,7 @@ These documents are useful for context but not critical to day-to-day contributo
   - Keep if we intend to support "edge lite" path; otherwise, fold into a single deployment guide.
 
 Keep and continue to update:
+
 - `docs/ENV_VARS.md`
 - `docs/AUTOTUNE.md`
 - `docs/CLBLAST_BUILD.md`
@@ -22,4 +23,5 @@ Keep and continue to update:
 - `docs/PROTOCOL_V0_1.md`
 
 Action:
+
 - Create `docs/archive/` and move the candidates above there, updating links as needed in a follow-up PR.

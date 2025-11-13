@@ -3,6 +3,7 @@
 This document describes the minimal Intermediate Representation (IR) introduced in this MVP to enable simple kernel lowering without pulling in a heavyweight compiler stack.
 
 Goals:
+
 - Represent a tiny set of ops (MatMul, Relu, FusedMatMulRelu)
 - Carry optional schedule hints (tile sizes, vectorization) for future tuning
 - Serialize to/from JSON for transport across the Agent/API
@@ -37,6 +38,7 @@ op = ir_from_dict(d)  # back to object
 Module: `uhop.ir.opencl_lowering`
 
 `lower_to_opencl(op)` returns a dict with keys:
+
 - `language`: always `opencl` for the MVP
 - `kernel_name`: symbol to launch
 - `source`: generated OpenCL C
@@ -46,6 +48,7 @@ Module: `uhop.ir.opencl_lowering`
 ### MatMul / FusedMatMulRelu
 
 Now lowered as a tiled kernel with local memory blocks:
+
 - Workgroup local size: `(tile, tile)`
 - Global size rounded up to tile multiples for M,N
 - Inner loop over K split into blocks of `tile`; guarded loads into `__local` arrays
@@ -59,6 +62,7 @@ Elementwise, still simple; returns metadata for consistency. Global size is roun
 ### Schedule Influence
 
 From `Schedule`:
+
 - `tile_m/tile_n/tile_k`: first non-null is used to pick the tile; normalized to common sizes
 - `vectorize`: sets `vec`; guarded path for float4 loads when `vec=4`
 
@@ -69,7 +73,13 @@ Future additions: true vectorized accumulator math, per-axis tiling, unroll fact
 `agent.compile_kernel` now accepts IR descriptors via:
 
 ```json
-{ "ir": { "type": "matmul", "A": {"name":"A","shape":[64,128],"dtype":"f32"}, "B": {"name":"B","shape":[128,32],"dtype":"f32"} } }
+{
+  "ir": {
+    "type": "matmul",
+    "A": { "name": "A", "shape": [64, 128], "dtype": "f32" },
+    "B": { "name": "B", "shape": [128, 32], "dtype": "f32" }
+  }
+}
 ```
 
 The Agent lowers IR to OpenCL and builds it. `validate` likewise accepts an `ir` block and will compile + execute on random inputs, comparing against NumPy references.
@@ -77,15 +87,19 @@ The Agent lowers IR to OpenCL and builds it. `validate` likewise accepts an `ir`
 ## Validation & Multi-shape Testing
 
 The agent `validate` action supports:
+
 ```json
 { "ir": { ... }, "tolerance": 1e-4 }
 ```
+
 Single shape inferred from IR tensor shapes.
 
 For multiple shapes:
+
 ```json
 { "ir": { ... }, "shape_sets": [ { "A": [64,128], "B": [128,64] }, { "A": [96,64], "B": [64,32] } ] }
 ```
+
 Returns `validated.multi` with pass/fail per shape.
 
 ## IR CLI Quickstart
@@ -139,5 +153,6 @@ else:
 ```
 
 Notes:
+
 - `binary_path` may be null if the OpenCL driver doesn't expose binaries; the mapping is still useful to detect that the exact source/options were already built.
 - The agent attaches `ir_key` to the returned compile artifact for easy indexing from higher-level coordinators.

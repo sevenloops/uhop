@@ -8,9 +8,9 @@ scattered os.environ lookups and makes validation/test stubbing easier.
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
-import threading
 
 
 @dataclass(frozen=True)
@@ -250,6 +250,7 @@ __all__ = ["get", "as_dict", "describe", "EnvVarMeta"]
 _OVERRIDES: Dict[str, Any] = {}
 _SET_LOCK = threading.Lock()
 
+
 def set(name: str, value: Any) -> None:
     """Set an environment variable (stringifying value) and record override.
 
@@ -263,5 +264,6 @@ def set(name: str, value: Any) -> None:
 
 def overrides() -> Dict[str, Any]:
     return dict(_OVERRIDES)
+
 
 __all__.extend(["set", "overrides"])

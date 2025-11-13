@@ -4,7 +4,7 @@ This directory contains low-level GPU kernel implementations for UHOP across mul
 
 ## Directory Structure
 
-```
+```text
 kernels/
 ├── __init__.py          # Kernel registry system
 ├── cuda/                # NVIDIA CUDA kernels (.cu)

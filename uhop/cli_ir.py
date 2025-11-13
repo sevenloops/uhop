@@ -5,6 +5,7 @@ Usage examples:
   python -m uhop.cli_ir build --file ir_matmul.json
   python -m uhop.cli_ir validate --file ir_matmul.json --shape-set "A=64x128,B=128x32" --shape-set "A=96x64,B=64x16"
 """
+
 from __future__ import annotations
 
 import argparse
@@ -40,7 +41,17 @@ def cmd_lower(args):
     lowered = lower_to_opencl(op)
     out = Path(args.out or (Path(args.file).stem + ".cl"))
     out.write_text(lowered["source"], encoding="utf-8")
-    print(json.dumps({"kernel_name": lowered.get("kernel_name"), "out": str(out), "tile": lowered.get("tile"), "vec": lowered.get("vec")}, indent=2))
+    print(
+        json.dumps(
+            {
+                "kernel_name": lowered.get("kernel_name"),
+                "out": str(out),
+                "tile": lowered.get("tile"),
+                "vec": lowered.get("vec"),
+            },
+            indent=2,
+        )
+    )
 
 
 def cmd_build(args):
@@ -54,13 +65,13 @@ def cmd_build(args):
 
 def _parse_shape_set(s: str):
     # format: A=64x128,B=128x32
-    parts = s.split(',')
+    parts = s.split(",")
     out = {}
     for p in parts:
-        if '=' not in p:
+        if "=" not in p:
             continue
-        name, rhs = p.split('=', 1)
-        dims = tuple(int(x) for x in rhs.split('x') if x)
+        name, rhs = p.split("=", 1)
+        dims = tuple(int(x) for x in rhs.split("x") if x)
         out[name.strip()] = list(dims)
     return out
 
@@ -79,6 +90,7 @@ def cmd_bench(args):
     # Compare vec=1 vs vec=4 (when N is aligned) for a single shape
     import numpy as np
     import pyopencl as cl  # type: ignore
+
     from .ir import ir_from_dict
     from .ir.opencl_lowering import lower_to_opencl
 

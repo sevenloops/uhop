@@ -1,4 +1,5 @@
 import os
+
 import numpy as np
 import pytest
 
@@ -25,11 +26,14 @@ def _run_shape(m, k, n):
     return err, C
 
 
-@pytest.mark.parametrize("m,k,n", [
-    (64, 64, 64),            # square
-    (96, 64, 80),            # rectangular
-    (37, 19, 53),            # odd sizes
-])
+@pytest.mark.parametrize(
+    "m,k,n",
+    [
+        (64, 64, 64),  # square
+        (96, 64, 80),  # rectangular
+        (37, 19, 53),  # odd sizes
+    ],
+)
 def test_tiled_validation_fallback_correct(m, k, n):
     err, C = _run_shape(m, k, n)
     # Even if tiled fails, fallback must yield correct result (small error)
@@ -45,8 +49,10 @@ def test_tiled_debug_partial_accums():
 
     # Acquire context/queue directly for debug kernel
     from uhop.backends.opencl_backend import _build_ctx_queue
+
     ctx, q = _build_ctx_queue()
     import pyopencl as cl  # type: ignore
+
     A = np.random.randn(m, k).astype(np.float32)
     B = np.random.randn(k, n).astype(np.float32)
     mf = cl.mem_flags
@@ -56,7 +62,7 @@ def test_tiled_debug_partial_accums():
     dbg_buf = cl.Buffer(ctx, mf.WRITE_ONLY, size=tiles * 16 * 16 * 4)
     # Build debug kernel
     base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uhop", "kernels", "opencl"))
-    debug_src = (open(os.path.join(base, "matmul_tiled_debug.cl")).read())
+    debug_src = open(os.path.join(base, "matmul_tiled_debug.cl")).read()
     flip = os.environ.get("UHOP_OPENCL_FLIP_GWS", "0").lower() in ("1", "true")
     build_opts = "-DTILE=16" + (" -DGWS_FLIP=1" if flip else "")
     prg = cl.Program(ctx, debug_src).build(options=build_opts)
@@ -96,7 +102,7 @@ def test_tiled_debug_partial_accums():
     # Optional deeper dump: compare loaded As/Bs for a specific tile index
     dump_t = int(os.environ.get("UHOP_OCL_DUMP_T", "-1"))
     if 0 <= dump_t < tiles:
-        dump_src = (open(os.path.join(base, "matmul_tiled_dump_loads.cl")).read())
+        dump_src = open(os.path.join(base, "matmul_tiled_dump_loads.cl")).read()
         build_opts2 = "-DTILE=16" + (" -DGWS_FLIP=1" if flip else "")
         prg2 = cl.Program(ctx, dump_src).build(options=build_opts2)
         kn2 = cl.Kernel(prg2, "matmul_tiled_dump_loads")
@@ -128,8 +134,10 @@ def test_tiled_debug_partial_accums_groups():
     os.environ["UHOP_OPENCL_ENABLE_TILED"] = "1"
     os.environ["UHOP_OPENCL_MATMUL_IMPL"] = "tiled"
     from uhop.backends.opencl_backend import _build_ctx_queue
+
     ctx, q = _build_ctx_queue()
     import pyopencl as cl  # type: ignore
+
     A = np.random.randn(m, k).astype(np.float32)
     B = np.random.randn(k, n).astype(np.float32)
     tiles_x = (n + 16 - 1) // 16
@@ -138,13 +146,13 @@ def test_tiled_debug_partial_accums_groups():
     a_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=A)
     b_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=B)
     base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uhop", "kernels", "opencl"))
-    dbg_src = (open(os.path.join(base, "matmul_tiled_debug_group.cl")).read())
+    dbg_src = open(os.path.join(base, "matmul_tiled_debug_group.cl")).read()
     prg = cl.Program(ctx, dbg_src).build(options="-DTILE=16")
     kn = cl.Kernel(prg, "matmul_tiled_debug_group")
     # Test a few representative groups: top-left, edge, bottom-right
     groups = [(0, 0), (tiles_x - 1, 0), (0, tiles_y - 1), (tiles_x - 1, tiles_y - 1)]
     for gx, gy in groups:
-        dbg_buf = cl.Buffer(ctx, mf.WRITE_ONLY, size=((k + 15)//16) * 16 * 16 * 4)
+        dbg_buf = cl.Buffer(ctx, mf.WRITE_ONLY, size=((k + 15) // 16) * 16 * 16 * 4)
         kn.set_args(a_buf, b_buf, dbg_buf, np.int32(m), np.int32(k), np.int32(n), np.int32(gx), np.int32(gy))
         evt = cl.enqueue_nd_range_kernel(q, kn, (16, 16), (16, 16))
         evt.wait()
@@ -162,15 +170,15 @@ def test_tiled_debug_partial_accums_groups():
             if L > 0:
                 rs = min(16, m - row0)
                 cs = min(16, n - col0)
-                At[:rs, :L] = A[row0:row0 + rs, t * 16: t * 16 + L]
-                Bt[:L, :cs] = B[t * 16: t * 16 + L, col0: col0 + cs]
+                At[:rs, :L] = A[row0 : row0 + rs, t * 16 : t * 16 + L]
+                Bt[:L, :cs] = B[t * 16 : t * 16 + L, col0 : col0 + cs]
             cpu_tile = At @ Bt
             err = float(np.max(np.abs(cpu_tile - dbg[t])))
             assert err < 1e-4, f"Group ({gx},{gy}) per-tile mismatch at t={t}: err={err:.2e}"
         # Sum-of-partials equals that C tile
         rs = min(16, m - row0)
         cs = min(16, n - col0)
-        cpu_C_tile = (A[row0:row0+rs, :] @ B[:, col0:col0+cs])
+        cpu_C_tile = A[row0 : row0 + rs, :] @ B[:, col0 : col0 + cs]
         dbg_sum = np.sum(dbg, axis=0)[:rs, :cs]
         terr = float(np.max(np.abs(cpu_C_tile - dbg_sum)))
         assert terr < 1e-4, f"Group ({gx},{gy}) sum-of-partials mismatch: err={terr:.2e}"

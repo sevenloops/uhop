@@ -3,6 +3,7 @@
 Includes pre-validation kernels and output checks to guard against
 mis-compiled kernels on some drivers.
 """
+
 from __future__ import annotations
 
 import numpy as _np
@@ -32,9 +33,7 @@ def _compute_local_size(tile: int, device: "cl.Device") -> tuple[int, int]:
     return (max(1, tile), max(1, other))
 
 
-def prevalidate_matmul(
-    ctx: "cl.Context", q: "cl.CommandQueue", kernel, tile: int, flip_gws: bool
-) -> float:
+def prevalidate_matmul(ctx: "cl.Context", q: "cl.CommandQueue", kernel, tile: int, flip_gws: bool) -> float:
     """Run a small 64x64 matmul to catch indexing/build issues.
 
     Returns Linf error vs numpy.

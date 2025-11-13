@@ -8,10 +8,11 @@ Responsibilities:
 NOTE: Original logic lifted from `opencl_backend._build_ctx_queue` to
       support modular import (matmul/conv2d modules depend on this).
 """
+
 from __future__ import annotations
 
-from typing import Optional, Tuple, Dict, Any
 import threading
+from typing import Any, Dict, Optional, Tuple
 
 try:
     import pyopencl as cl  # type: ignore

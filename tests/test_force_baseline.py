@@ -1,7 +1,8 @@
 import numpy as np
 
-from uhop import optimize
 from uhop import config as _cfg
+from uhop import optimize
+
 
 @optimize("matmul")
 def matmul_np(a, b):
@@ -16,6 +17,7 @@ def test_force_baseline_env(monkeypatch):
     monkeypatch.setenv("UHOP_FORCE_BASELINE", "1")
     # Clear any prior decision cache
     from uhop.cache import UhopCache as _Cache
+
     c = _Cache()
     c.clear()
     a = np.random.default_rng(0).random((8, 8), dtype=np.float32)
@@ -33,6 +35,7 @@ def test_force_baseline_env(monkeypatch):
 def test_force_baseline_programmatic(monkeypatch):
     monkeypatch.delenv("UHOP_FORCE_BASELINE", raising=False)
     from uhop.cache import UhopCache as _Cache
+
     c = _Cache()
     c.clear()
     _cfg.set("UHOP_FORCE_BASELINE", "1")

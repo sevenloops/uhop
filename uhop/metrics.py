@@ -3,14 +3,14 @@
 Collects a compact KPI snapshot from cache and autotune stores under
 ~/.uhop_mvp_cache by default. Safe to run on any machine.
 """
+
 from __future__ import annotations
 
+import json
+import os
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import json
-import time
-import os
-
 
 DEFAULT_CACHE_DIR = Path(os.path.expanduser("~")) / ".uhop_mvp_cache"
 
@@ -115,12 +115,15 @@ def write_kpi_snapshot(output: Path | str, cache_dir: Optional[Path | str] = Non
             return {"p50": None, "p90": None, "p99": None, "mean": None, "count": 0}
         s = sorted(vals)
         n = len(s)
+
         def _pick(p: float) -> float:
             if n == 1:
                 return s[0]
             idx = int(p * (n - 1))
             return float(s[idx])
+
         import statistics as _stats
+
         return {
             "p50": _pick(0.50),
             "p90": _pick(0.90),

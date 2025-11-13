@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'issues/**'
-      - 'scripts/sync_issues.py'
-      - '.github/workflows/sync_issues.yml'
+      - "issues/**"
+      - "scripts/sync_issues.py"
+      - ".github/workflows/sync_issues.yml"
   schedule:
-    - cron: '0 6 * * *'
+    - cron: "0 6 * * *"
 
 concurrency:
   group: sync-issues-${{ github.ref }}
@@ -24,7 +24,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: pip install --upgrade pip requests

@@ -9,7 +9,7 @@
 __kernel void matmul_tiled_debug(__global const float *A, __global const float *B,
                                  __global float *Cdbg, const int N, const int M,
                                  const int K) {
-  
+
 #ifdef GWS_FLIP
   const int row = get_global_id(0);
   const int col = get_global_id(1);

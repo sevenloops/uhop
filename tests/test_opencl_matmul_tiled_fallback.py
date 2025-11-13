@@ -3,6 +3,7 @@ import pytest
 
 from uhop.backends import is_opencl_available
 
+
 @pytest.mark.skipif(not is_opencl_available(), reason="OpenCL not available")
 def test_opencl_tiled_fallback(monkeypatch):
     # Force tiled implementation
@@ -10,6 +11,7 @@ def test_opencl_tiled_fallback(monkeypatch):
     monkeypatch.setenv("UHOP_OPENCL_ENABLE_TILED", "1")
     # Inject failure by marking shape unstable ahead of time
     from uhop.cache import UhopAutotune as _Auto
+
     _ = _Auto()
     # We don't know actual device name here without context; fallback to marking after first attempt
     # Instead monkeypatch the kernel source loader to raise, simulating build failure -> fallback

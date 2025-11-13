@@ -17,24 +17,25 @@ Design notes:
    uses specialized fast paths directly for now (incremental migration).
  - Duplicate registration is idempotent (safe to call multiple times).
 """
+
 from __future__ import annotations
 
 from typing import List
 
-from .base import Backend, get_backend_manager
 from . import (
+    is_opencl_available,
     is_torch_available,
     is_triton_available,
-    is_opencl_available,
-    torch_matmul,
+    opencl_conv2d,
+    opencl_matmul,
+    opencl_relu,
     torch_conv2d,
+    torch_matmul,
     torch_relu,
     triton_matmul,
     triton_relu,
-    opencl_matmul,
-    opencl_conv2d,
-    opencl_relu,
 )
+from .base import Backend, get_backend_manager
 
 
 class TorchBackend(Backend):
@@ -48,9 +49,12 @@ class TorchBackend(Backend):
             # Device count best‑effort
             try:
                 import torch  # type: ignore
+
                 if torch.cuda.is_available():
                     self.capabilities.device_count = torch.cuda.device_count()
-                    self.capabilities.device_names = [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())]
+                    self.capabilities.device_names = [
+                        torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())
+                    ]
                 else:
                     self.capabilities.device_count = 1
                     self.capabilities.device_names = ["cpu"]
@@ -63,6 +67,7 @@ class TorchBackend(Backend):
         libs = {}
         try:
             import torch  # type: ignore
+
             libs["torch"] = True
             if getattr(torch, "cuda", None) and torch.cuda.is_available():
                 libs["cublas"] = True
@@ -104,6 +109,7 @@ class OpenCLBackend(Backend):
         if avail:
             try:
                 import pyopencl as cl  # type: ignore
+
                 plats = cl.get_platforms()
                 devs = []
                 for p in plats:
@@ -140,6 +146,7 @@ def ensure_default_backends_registered() -> None:
     # Optionally register Vulkan PoC backend when enabled
     try:
         import os
+
         from .vulkan_backend import VulkanBackend  # type: ignore
 
         if str(os.environ.get("UHOP_ENABLE_VULKAN_POC", "0")).lower() in (
@@ -175,5 +182,6 @@ def ensure_default_backends_registered() -> None:
                 b.register_manual_kernel("relu", opencl_relu)
         except Exception:
             continue
+
 
 __all__ = ["ensure_default_backends_registered"]

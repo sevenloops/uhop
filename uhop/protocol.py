@@ -20,13 +20,24 @@ Usage: backend websocket server can call `validate_incoming(msg)` before
 processing. If invalid, it returns (False, reason). For responses generated
 server-side, `build_error_response(id, reason)` ensures schema compliance.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, Tuple
 
 PROTOCOL_VERSION = "0.1"
-KNOWN_ACTIONS = {"info", "benchmark", "compile_kernel", "validate", "cache_list", "cache_set", "cache_delete", "run_demo", "generate_kernel"}
+KNOWN_ACTIONS = {
+    "info",
+    "benchmark",
+    "compile_kernel",
+    "validate",
+    "cache_list",
+    "cache_set",
+    "cache_delete",
+    "run_demo",
+    "generate_kernel",
+}
 
 
 @dataclass

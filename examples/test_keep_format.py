@@ -10,8 +10,10 @@ Run: python3 test_keep_format.py
 """
 
 import time
+
 import numpy as np
 import torch
+
 from uhop import UHopOptimizer
 
 print("=" * 70)
@@ -25,9 +27,11 @@ print("-" * 70)
 
 hop_default = UHopOptimizer()
 
+
 @hop_default.optimize("matmul")
 def matmul_default(a, b):
     return np.matmul(a, b)
+
 
 # NumPy inputs → NumPy output
 A_np = np.random.randn(1024, 1024).astype(np.float32)
@@ -61,9 +65,11 @@ print("-" * 70)
 
 hop_keep = UHopOptimizer(keep_format=True)
 
+
 @hop_keep.optimize("matmul")
 def matmul_keep(a, b):
     return np.matmul(a, b)
+
 
 # NumPy inputs → Torch output
 start = time.perf_counter()
@@ -92,11 +98,13 @@ print("-" * 70)
 # Without keep_format: numpy → torch → numpy → torch → numpy → torch → numpy
 print("WITHOUT keep_format (many conversions):")
 
+
 @hop_default.optimize("matmul")
 def chain_default(a, b, c):
     temp1 = np.matmul(a, b)  # Convert to torch, compute, convert back to numpy
     temp2 = np.matmul(temp1, c)  # Convert to torch again!
     return temp2
+
 
 C_np = np.random.randn(1024, 1024).astype(np.float32)
 
@@ -111,11 +119,13 @@ print()
 # With keep_format: numpy → torch (once) → torch → torch (stay on GPU!)
 print("WITH keep_format=True (stay on GPU):")
 
+
 @hop_keep.optimize("matmul")
 def chain_keep(a, b, c):
     temp1 = np.matmul(a, b)  # Returns torch.Tensor on GPU
     temp2 = np.matmul(temp1, c)  # Input already torch, stays on GPU!
     return temp2
+
 
 start = time.perf_counter()
 result_keep = chain_keep(A_np, B_np, C_np)
@@ -130,31 +140,33 @@ print()
 print("Test 4: PyTorch Integration Example")
 print("-" * 70)
 
+
 # Create a simple PyTorch model using UHOP-optimized operations
 class SimpleModel(torch.nn.Module):
     def __init__(self):
         super().__init__()
         self.hop = UHopOptimizer(keep_format=True)
-        
+
         # Weights
         self.w1 = torch.randn(1024, 512).cuda()
         self.w2 = torch.randn(512, 256).cuda()
-        
+
     def forward(self, x):
         # Decorate operations with UHOP optimization
         @self.hop.optimize("matmul")
         def mm(a, b):
             return torch.matmul(a, b)
-        
+
         @self.hop.optimize("relu")
         def relu(x):
             return torch.relu(x)
-        
+
         # Forward pass - all operations stay on GPU!
         h = mm(x, self.w1)
         h = relu(h)
         y = mm(h, self.w2)
         return y
+
 
 model = SimpleModel()
 x_input = torch.randn(32, 1024).cuda()

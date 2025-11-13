@@ -16,7 +16,7 @@ Create a harness comparing AI-generated kernels vs trusted baselines with random
 
 ## Definition of Done
 
-- [ ] >99% validation pass rate on 100 randomized seeds for matmul
+- [ ] > 99% validation pass rate on 100 randomized seeds for matmul
 - [ ] Failing cases auto-logged with artifacts
 
 ## Dependencies

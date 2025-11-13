@@ -7,7 +7,7 @@ __kernel void matmul_tiled_dump_loads(__global const float *A, __global const fl
                                       __global float *As_out, __global float *Bs_out,
                                       const int N, const int M, const int K,
                                       const int TIDX) {
-  
+
 #ifdef GWS_FLIP
   const int row = get_global_id(0);
   const int col = get_global_id(1);

@@ -14,6 +14,7 @@ Run with: python3 test_edge_lite.py
 
 import sys
 import time
+
 import numpy as np
 
 print("=" * 60)
@@ -25,14 +26,15 @@ print()
 print("Test 1: Import lite backend...")
 try:
     from uhop.backends.lite_backend import (
+        get_edge_device_info,
         is_lite_backend_available,
         is_lite_opencl_available,
-        lite_matmul,
         lite_conv2d,
+        lite_matmul,
         lite_relu,
-        get_edge_device_info,
         print_edge_device_info,
     )
+
     print("✓ Successfully imported lite backend")
 except Exception as e:
     print(f"✗ Failed to import lite backend: {e}")
@@ -203,12 +205,13 @@ print()
 
 # Print recommendations
 device_info = get_edge_device_info()
-if device_info['has_gpu']:
+if device_info["has_gpu"]:
     print("✓ Your system has OpenCL GPU support!")
     print("  The lite backend can use GPU acceleration.")
     print()
     print("  Recommended tile sizes for your hardware:")
     from uhop.backends.lite_backend import get_edge_optimization_hints
+
     hints = get_edge_optimization_hints()
     print(f"    - Tile size: {hints['tile_size']}")
     print(f"    - Use FP16: {hints['use_fp16']}")

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -16,6 +15,8 @@ def compute_ir_key(ir_obj: Dict[str, Any]) -> str:
     Uses JSON dumps with sorted keys and SHA256 hash; returns hex digest.
     """
     return compute_stable_hash(ir_obj)
+
+
 class IRKernelIndex:
     """Persist mapping from (ir_key, device) -> source_hash and optional binary path.
 
@@ -46,7 +47,14 @@ class IRKernelIndex:
     def _key(self, ir_key: str, device: str) -> str:
         return f"{ir_key}|{device}"
 
-    def set(self, ir_key: str, device: str, source_hash: str, kernel_name: Optional[str] = None, binary_path: Optional[str] = None):
+    def set(
+        self,
+        ir_key: str,
+        device: str,
+        source_hash: str,
+        kernel_name: Optional[str] = None,
+        binary_path: Optional[str] = None,
+    ):
         idx = self._read()
         idx[self._key(ir_key, device)] = {
             "source_hash": source_hash,
@@ -77,4 +85,3 @@ class IRKernelIndex:
         for key in keys_to_remove:
             del idx[key]
         self._write(idx)
-

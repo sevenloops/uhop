@@ -1,6 +1,6 @@
 """CLBlast integration wrapped for OpenCL matmul/conv2d usage."""
-from __future__ import annotations
 
+from __future__ import annotations
 
 from .context import get_ctx_queue
 

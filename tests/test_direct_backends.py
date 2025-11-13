@@ -2,14 +2,18 @@
 """
 Direct backend testing - bypassing UHOP decorator overhead.
 """
+
 import time
+
 import numpy as np
 import torch
 
+from uhop.backends.opencl_backend import opencl_matmul
+
 # Import backends directly
 from uhop.backends.torch_backend import torch_matmul
-from uhop.backends.opencl_backend import opencl_matmul
 from uhop.backends.triton_backend import triton_matmul
+
 
 def benchmark_direct_backends(size=1024, iters=10):
     """Benchmark backends directly without decorator overhead."""
@@ -28,8 +32,8 @@ def benchmark_direct_backends(size=1024, iters=10):
     # Test 1: Raw PyTorch CUDA
     print("1. Raw PyTorch CUDA (cuBLAS) - Direct torch.matmul")
     if torch.cuda.is_available():
-        a_torch = torch.tensor(a_np, device='cuda')
-        b_torch = torch.tensor(b_np, device='cuda')
+        a_torch = torch.tensor(a_np, device="cuda")
+        b_torch = torch.tensor(b_np, device="cuda")
 
         # Warmup
         for _ in range(3):
@@ -46,7 +50,7 @@ def benchmark_direct_backends(size=1024, iters=10):
         avg_time = np.mean(times)
         std_time = np.std(times)
         gflops = (2 * size**3) / (avg_time * 1e9)
-        results['raw_cuda'] = {'time': avg_time, 'std': std_time, 'gflops': gflops}
+        results["raw_cuda"] = {"time": avg_time, "std": std_time, "gflops": gflops}
         print(f"   Average: {avg_time*1000:.3f} ms ± {std_time*1000:.3f} ms")
         print(f"   Performance: {gflops:.2f} GFLOPS\n")
 
@@ -67,20 +71,20 @@ def benchmark_direct_backends(size=1024, iters=10):
         avg_time = np.mean(times)
         std_time = np.std(times)
         gflops = (2 * size**3) / (avg_time * 1e9)
-        results['torch_backend'] = {'time': avg_time, 'std': std_time, 'gflops': gflops}
+        results["torch_backend"] = {"time": avg_time, "std": std_time, "gflops": gflops}
         print(f"   Average: {avg_time*1000:.3f} ms ± {std_time*1000:.3f} ms")
         print(f"   Performance: {gflops:.2f} GFLOPS")
 
         # Calculate conversion overhead
-        if 'raw_cuda' in results:
-            overhead = avg_time - results['raw_cuda']['time']
+        if "raw_cuda" in results:
+            overhead = avg_time - results["raw_cuda"]["time"]
             print(f"   Conversion overhead: {overhead*1000:.3f} ms\n")
 
     # Test 3: UHOP torch_backend with torch tensor input (no conversion)
     print("3. UHOP torch_backend - torch_matmul() with torch tensor input")
     if torch.cuda.is_available():
-        a_torch = torch.tensor(a_np, device='cuda')
-        b_torch = torch.tensor(b_np, device='cuda')
+        a_torch = torch.tensor(a_np, device="cuda")
+        b_torch = torch.tensor(b_np, device="cuda")
 
         # Warmup
         for _ in range(3):
@@ -97,7 +101,7 @@ def benchmark_direct_backends(size=1024, iters=10):
         avg_time = np.mean(times)
         std_time = np.std(times)
         gflops = (2 * size**3) / (avg_time * 1e9)
-        results['torch_backend_tensor'] = {'time': avg_time, 'std': std_time, 'gflops': gflops}
+        results["torch_backend_tensor"] = {"time": avg_time, "std": std_time, "gflops": gflops}
         print(f"   Average: {avg_time*1000:.3f} ms ± {std_time*1000:.3f} ms")
         print(f"   Performance: {gflops:.2f} GFLOPS\n")
 
@@ -121,7 +125,7 @@ def benchmark_direct_backends(size=1024, iters=10):
         avg_time = np.mean(times)
         std_time = np.std(times)
         gflops = (2 * size**3) / (avg_time * 1e9)
-        results['opencl'] = {'time': avg_time, 'std': std_time, 'gflops': gflops}
+        results["opencl"] = {"time": avg_time, "std": std_time, "gflops": gflops}
         print(f"   Average: {avg_time*1000:.3f} ms ± {std_time*1000:.3f} ms")
         print(f"   Performance: {gflops:.2f} GFLOPS\n")
     except Exception as e:
@@ -147,7 +151,7 @@ def benchmark_direct_backends(size=1024, iters=10):
         avg_time = np.mean(times)
         std_time = np.std(times)
         gflops = (2 * size**3) / (avg_time * 1e9)
-        results['triton'] = {'time': avg_time, 'std': std_time, 'gflops': gflops}
+        results["triton"] = {"time": avg_time, "std": std_time, "gflops": gflops}
         print(f"   Average: {avg_time*1000:.3f} ms ± {std_time*1000:.3f} ms")
         print(f"   Performance: {gflops:.2f} GFLOPS\n")
     except Exception as e:
@@ -164,7 +168,7 @@ def benchmark_direct_backends(size=1024, iters=10):
     avg_time = np.mean(times)
     std_time = np.std(times)
     gflops = (2 * size**3) / (avg_time * 1e9)
-    results['cpu'] = {'time': avg_time, 'std': std_time, 'gflops': gflops}
+    results["cpu"] = {"time": avg_time, "std": std_time, "gflops": gflops}
     print(f"   Average: {avg_time*1000:.3f} ms ± {std_time*1000:.3f} ms")
     print(f"   Performance: {gflops:.2f} GFLOPS\n")
 
@@ -175,26 +179,26 @@ def benchmark_direct_backends(size=1024, iters=10):
     print(f"{'Backend':<25} {'Time (ms)':<12} {'GFLOPS':<12} {'vs CPU':<10}")
     print("-" * 70)
 
-    baseline_time = results['cpu']['time']
-    sorted_results = sorted(results.items(), key=lambda x: x[1]['time'])
+    baseline_time = results["cpu"]["time"]
+    sorted_results = sorted(results.items(), key=lambda x: x[1]["time"])
 
     for backend, data in sorted_results:
-        speedup = baseline_time / data['time']
+        speedup = baseline_time / data["time"]
         print(f"{backend:<25} {data['time']*1000:<12.3f} {data['gflops']:<12.2f} {speedup:<10.1f}x")
 
     print(f"{'='*70}\n")
 
     # Analysis
     print("ANALYSIS:")
-    if 'raw_cuda' in results and 'torch_backend' in results:
-        overhead_pct = ((results['torch_backend']['time'] / results['raw_cuda']['time']) - 1) * 100
+    if "raw_cuda" in results and "torch_backend" in results:
+        overhead_pct = ((results["torch_backend"]["time"] / results["raw_cuda"]["time"]) - 1) * 100
         print(f"  - torch_backend adds {overhead_pct:.1f}% overhead vs raw CUDA (numpy conversion)")
 
-    if 'raw_cuda' in results and 'opencl' in results:
-        ratio = results['raw_cuda']['gflops'] / results['opencl']['gflops']
+    if "raw_cuda" in results and "opencl" in results:
+        ratio = results["raw_cuda"]["gflops"] / results["opencl"]["gflops"]
         print(f"  - Raw CUDA is {ratio:.1f}x faster than OpenCL (cuBLAS vs custom kernel)")
 
-    if 'opencl' in results:
+    if "opencl" in results:
         print("  - OpenCL uses tiled kernel with local memory (TILE=16)")
         print("  - OpenCL could be optimized with larger tiles, vectorization, etc.")
 
@@ -205,6 +209,7 @@ def benchmark_direct_backends(size=1024, iters=10):
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="Test direct backend performance")
     parser.add_argument("--size", type=int, default=1024, help="Matrix size")
     parser.add_argument("--iters", type=int, default=10, help="Number of iterations")

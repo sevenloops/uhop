@@ -23,17 +23,19 @@ def conv2d_numpy_valid(x, w, stride=1, padding=0):
                     for ci in range(C):
                         for ky in range(KH):
                             for kx in range(KW):
-                                s += x[n, ci, y+ky, x0+kx] * w[co, ci, ky, kx]
+                                s += x[n, ci, y + ky, x0 + kx] * w[co, ci, ky, kx]
                     out[n, co, y, x0] = s
     return out
 
 
-@pytest.mark.parametrize("NCHW_Cout_K",
-                         [
-                             ((1, 1, 8, 8), 1, (3, 3)),
-                             ((1, 3, 16, 16), 4, (3, 3)),
-                             ((2, 2, 9, 9), 3, (5, 5)),
-                         ])
+@pytest.mark.parametrize(
+    "NCHW_Cout_K",
+    [
+        ((1, 1, 8, 8), 1, (3, 3)),
+        ((1, 3, 16, 16), 4, (3, 3)),
+        ((2, 2, 9, 9), 3, (5, 5)),
+    ],
+)
 def test_opencl_conv2d_various_shapes(NCHW_Cout_K):
     (N, C, H, W), Cout, (KH, KW) = NCHW_Cout_K
     x = np.random.randn(N, C, H, W).astype(np.float32)

@@ -4,10 +4,10 @@ Enhanced IR with versioning, memory spaces, layouts, and stable hashing.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple, List
-import json
 import hashlib
+import json
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Tuple
 
 
 # Simple dtype alias for MVP

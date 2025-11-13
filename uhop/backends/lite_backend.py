@@ -24,12 +24,14 @@ import numpy as np
 # Try to import OpenCL (optional)
 try:
     import pyopencl as cl
+
     from uhop.backends.opencl_backend import (
         is_opencl_available,
-        opencl_matmul,
         opencl_conv2d,
+        opencl_matmul,
         opencl_relu,
     )
+
     _HAS_OPENCL = True
 except ImportError:
     _HAS_OPENCL = False
@@ -71,11 +73,7 @@ def lite_matmul(a: np.ndarray, b: np.ndarray, use_gpu: bool = True) -> np.ndarra
 
 
 def lite_conv2d(
-    input_data: np.ndarray,
-    weight: np.ndarray,
-    stride: int = 1,
-    padding: int = 0,
-    use_gpu: bool = True
+    input_data: np.ndarray, weight: np.ndarray, stride: int = 1, padding: int = 0, use_gpu: bool = True
 ) -> np.ndarray:
     """
     2D convolution optimized for edge devices.
@@ -123,12 +121,7 @@ def lite_relu(x: np.ndarray, use_gpu: bool = True) -> np.ndarray:
     return np.maximum(0, x)
 
 
-def _naive_conv2d_numpy(
-    input_data: np.ndarray,
-    weight: np.ndarray,
-    stride: int,
-    padding: int
-) -> np.ndarray:
+def _naive_conv2d_numpy(input_data: np.ndarray, weight: np.ndarray, stride: int, padding: int) -> np.ndarray:
     """
     Naive NumPy implementation of 2D convolution.
     Used as fallback when OpenCL is not available.
@@ -138,11 +131,7 @@ def _naive_conv2d_numpy(
 
     # Apply padding
     if padding > 0:
-        input_padded = np.pad(
-            input_data,
-            ((0, 0), (0, 0), (padding, padding), (padding, padding)),
-            mode='constant'
-        )
+        input_padded = np.pad(input_data, ((0, 0), (0, 0), (padding, padding), (padding, padding)), mode="constant")
     else:
         input_padded = input_data
 
@@ -162,7 +151,7 @@ def _naive_conv2d_numpy(
                     w_start = w * stride
 
                     # Extract patch
-                    patch = input_padded[n, :, h_start:h_start+KH, w_start:w_start+KW]
+                    patch = input_padded[n, :, h_start : h_start + KH, w_start : w_start + KW]
 
                     # Convolve with kernel
                     output[n, c_out, h, w] = np.sum(patch * weight[c_out])
@@ -184,12 +173,12 @@ def get_edge_device_info() -> dict:
         - local_memory_kb: Local memory size in KB
     """
     info = {
-        'has_gpu': False,
-        'device_name': 'CPU (NumPy)',
-        'memory_mb': 0,
-        'compute_units': 0,
-        'max_work_group_size': 0,
-        'local_memory_kb': 0,
+        "has_gpu": False,
+        "device_name": "CPU (NumPy)",
+        "memory_mb": 0,
+        "compute_units": 0,
+        "max_work_group_size": 0,
+        "local_memory_kb": 0,
     }
 
     if not _HAS_OPENCL:
@@ -197,15 +186,16 @@ def get_edge_device_info() -> dict:
 
     try:
         from uhop.backends.opencl_backend import _build_ctx_queue
+
         ctx, queue = _build_ctx_queue()
         device = queue.device
 
-        info['has_gpu'] = True
-        info['device_name'] = device.name.strip()
-        info['memory_mb'] = device.global_mem_size // (1024 * 1024)
-        info['compute_units'] = device.max_compute_units
-        info['max_work_group_size'] = device.max_work_group_size
-        info['local_memory_kb'] = device.local_mem_size // 1024
+        info["has_gpu"] = True
+        info["device_name"] = device.name.strip()
+        info["memory_mb"] = device.global_mem_size // (1024 * 1024)
+        info["compute_units"] = device.max_compute_units
+        info["max_work_group_size"] = device.max_work_group_size
+        info["local_memory_kb"] = device.local_mem_size // 1024
 
     except Exception:
         pass
@@ -223,7 +213,7 @@ def print_edge_device_info():
     print(f"OpenCL GPU Available: {info['has_gpu']}")
     print(f"Device Name: {info['device_name']}")
 
-    if info['has_gpu']:
+    if info["has_gpu"]:
         print(f"Memory: {info['memory_mb']} MB")
         print(f"Compute Units: {info['compute_units']}")
         print(f"Max Work Group Size: {info['max_work_group_size']}")
@@ -238,10 +228,10 @@ def print_edge_device_info():
 
 # Edge-specific optimization hints
 EDGE_OPTIMIZATION_HINTS = {
-    'tile_size': 8,  # Smaller tiles for ARM GPUs
-    'use_fp16': True,  # Prefer FP16 on mobile GPUs
-    'memory_efficient': True,  # Optimize for low memory
-    'power_aware': True,  # Consider battery/thermal limits
+    "tile_size": 8,  # Smaller tiles for ARM GPUs
+    "use_fp16": True,  # Prefer FP16 on mobile GPUs
+    "memory_efficient": True,  # Optimize for low memory
+    "power_aware": True,  # Consider battery/thermal limits
 }
 
 
@@ -257,13 +247,13 @@ def get_edge_optimization_hints() -> dict:
     # Adjust based on actual device
     info = get_edge_device_info()
 
-    if info['has_gpu']:
+    if info["has_gpu"]:
         # Adjust tile size based on local memory
-        if info['local_memory_kb'] >= 48:
-            hints['tile_size'] = 16
-        elif info['local_memory_kb'] >= 32:
-            hints['tile_size'] = 12
+        if info["local_memory_kb"] >= 48:
+            hints["tile_size"] = 16
+        elif info["local_memory_kb"] >= 32:
+            hints["tile_size"] = 12
         else:
-            hints['tile_size'] = 8
+            hints["tile_size"] = 8
 
     return hints

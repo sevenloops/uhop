@@ -1,5 +1,13 @@
-from uhop.ir import Tensor, MatMul, Relu, FusedMatMulRelu, Schedule, ir_from_dict
-from uhop.ir import MEMORY_SPACE_GLOBAL, MEMORY_SPACE_LOCAL, LAYOUT_ROW_MAJOR, LAYOUT_NCHW
+from uhop.ir import (
+    LAYOUT_NCHW,
+    MEMORY_SPACE_LOCAL,
+    FusedMatMulRelu,
+    MatMul,
+    Relu,
+    Schedule,
+    Tensor,
+    ir_from_dict,
+)
 
 
 def test_matmul_roundtrip():
@@ -17,9 +25,7 @@ def test_matmul_roundtrip():
 
 
 def test_fused_roundtrip():
-    fused = FusedMatMulRelu(
-        A=Tensor("A", (4, 8)), B=Tensor("B", (8, 2)), schedule=Schedule(vectorize=4)
-    )
+    fused = FusedMatMulRelu(A=Tensor("A", (4, 8)), B=Tensor("B", (8, 2)), schedule=Schedule(vectorize=4))
     d = fused.to_dict()
     op2 = ir_from_dict(d)
     assert isinstance(op2, FusedMatMulRelu)
@@ -71,4 +77,3 @@ def test_schedule_unroll():
     schedule2 = Schedule.from_dict(d)
     assert schedule2.tile_m == 8
     assert schedule2.unroll == 4
-

@@ -15,6 +15,7 @@ Usage:
     y = matmul(a, b)  # UHOP will select the best available backend
     z = relu(y)
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -64,8 +65,8 @@ def matmul(a, b):
     """
     try:
         from .backends.base import get_backend_manager  # type: ignore
-        from .policy import BackendPolicy  # type: ignore
         from .cache import UhopCache  # type: ignore
+        from .policy import BackendPolicy  # type: ignore
 
         mgr = get_backend_manager()
         # Ensure backends are registered lazily
@@ -95,8 +96,8 @@ def relu(x):
     """UHOP-optimized ReLU."""
     try:
         from .backends.base import get_backend_manager  # type: ignore
-        from .policy import BackendPolicy  # type: ignore
         from .cache import UhopCache  # type: ignore
+        from .policy import BackendPolicy  # type: ignore
 
         mgr = get_backend_manager()
         try:

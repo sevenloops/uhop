@@ -1,5 +1,5 @@
-import pytest
 import numpy as np
+import pytest
 
 
 def _has_pyopencl():
@@ -13,9 +13,10 @@ def _has_pyopencl():
 
 @pytest.mark.skipif(not _has_pyopencl(), reason="pyopencl not available")
 def test_lowered_matmul_correct_small():
-    from uhop.ir import Tensor, MatMul
-    from uhop.ir.opencl_lowering import lower_to_opencl
     import pyopencl as cl
+
+    from uhop.ir import MatMul, Tensor
+    from uhop.ir.opencl_lowering import lower_to_opencl
 
     M, K, N = 4, 3, 5
     A = np.random.default_rng(0).random((M, K), dtype=np.float32)
@@ -43,9 +44,10 @@ def test_lowered_matmul_correct_small():
 
 @pytest.mark.skipif(not _has_pyopencl(), reason="pyopencl not available")
 def test_lowered_fused_matches_separate():
-    from uhop.ir import Tensor, FusedMatMulRelu
-    from uhop.ir.opencl_lowering import lower_to_opencl
     import pyopencl as cl
+
+    from uhop.ir import FusedMatMulRelu, Tensor
+    from uhop.ir.opencl_lowering import lower_to_opencl
 
     M, K, N = 4, 3, 5
     A = np.random.default_rng(0).random((M, K), dtype=np.float32)

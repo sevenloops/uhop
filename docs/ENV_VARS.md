@@ -18,7 +18,7 @@ This document lists supported `UHOP_*` environment variables, their purpose, def
 - UHOP_POLICY_BENCH_WARMUP (int)
   - Warmup runs per backend before timing in benchmark mode. Default: `1`.
 - UHOP_POLICY_BENCH_EARLY (float)
-  - Early-exit factor: if first timing of a candidate is slower than current winner * factor, skip remaining iterations. Default: `2.5`.
+  - Early-exit factor: if first timing of a candidate is slower than current winner \* factor, skip remaining iterations. Default: `2.5`.
 - UHOP_CACHE_PER_SHAPE (bool)
   - Cache decisions per input shape/dtype signature. Default: `1` (enabled).
 - UHOP_EXPLAIN_ON_CACHE (bool)
@@ -65,6 +65,7 @@ This document lists supported `UHOP_*` environment variables, their purpose, def
   - Force-disable vectorized load path even when schedule requests `vec=4`; useful for A/B correctness diagnostics. Default: `0`. (planned; may be ignored in current build)
 
 Notes:
+
 - IR tiling and vectorization are controlled via `Schedule` objects or CLI flags (`--tile`, `--vec`) rather than environment variables.
 
 ## AI Codegen
@@ -91,6 +92,7 @@ Notes:
   - If set, disable network access in sandboxed Python runner. Best-effort via socket monkeypatch. Default: `0`.
 
 Notes:
+
 - Boolean accepts: `1,true,yes,on` (case-insensitive). Anything else is false.
 - CSV values are split by comma and trimmed.
 - Changes take effect at process start.

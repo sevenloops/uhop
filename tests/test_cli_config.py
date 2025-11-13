@@ -1,5 +1,7 @@
 from click.testing import CliRunner
+
 from uhop.cli import main
+
 
 def test_config_list_runs():
     runner = CliRunner()

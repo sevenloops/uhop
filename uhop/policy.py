@@ -6,34 +6,37 @@ preference order, cached benchmarking, and lightweight validation hooks.
 This is an initial MVP that can be expanded with richer scoring (variance,
 resource constraints, instability flags).
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Callable, List, Optional
 import statistics
 import time
+from dataclasses import dataclass
+from typing import Any, Callable, List, Optional
+
 import numpy as _np
 
-from .utils.logging import get_logger as _get_logger
+from . import config as _cfg
 from .backends import (
     is_opencl_available,
     is_torch_available,
     is_triton_available,
-    opencl_matmul,
     opencl_conv2d,
+    opencl_matmul,
     opencl_relu,
-    torch_matmul,
     torch_conv2d,
+    torch_matmul,
     torch_relu,
     triton_matmul,
     triton_relu,
 )
 from .backends.registry import ensure_default_backends_registered
-from . import config as _cfg
 from .cache import UhopAutotune
 from .hardware import detect_hardware
+from .utils.logging import get_logger as _get_logger
 
 _log = _get_logger("uhop.policy")
+
 
 @dataclass
 class PolicySelection:
@@ -41,6 +44,7 @@ class PolicySelection:
     policy_reason: str
     run: Callable[..., Any]
     latency_ms: float | None = None
+
 
 class BackendPolicy:
     def __init__(self, backend_manager, cache):
@@ -59,7 +63,7 @@ class BackendPolicy:
         try:
             ensure_default_backends_registered()
             names = []
-            for name in ["torch","triton","opencl"]:
+            for name in ["torch", "triton", "opencl"]:
                 try:
                     b = getattr(self.backend_manager, "get_backend", lambda x: None)(name)
                     if b and b.capabilities.available:
@@ -68,11 +72,33 @@ class BackendPolicy:
                     continue
             if names:
                 # Append cpu/numpy fallbacks implicitly
-                names.extend(["cpu","numpy"])  # maintain baseline entries
-                return names
+                names.extend(["cpu", "numpy"])  # maintain baseline entries
+                return self._apply_hardware_bias(names)
         except Exception:
             pass
-        return self.default_order
+        return self._apply_hardware_bias(list(self.default_order))
+
+    def _apply_hardware_bias(self, order: List[str]) -> List[str]:
+        try:
+            hw = detect_hardware()
+        except Exception:
+            hw = None
+        if hw is None:
+            return order
+
+        vendor = (getattr(hw, "vendor", "") or "").lower()
+        kind = (getattr(hw, "kind", "") or "").lower()
+        if vendor == "amd" and kind.startswith("opencl"):
+            return self._move_front(order, "opencl")
+        return order
+
+    @staticmethod
+    def _move_front(order: List[str], backend: str) -> List[str]:
+        if backend not in order:
+            return order
+        reordered = [backend]
+        reordered.extend([name for name in order if name != backend])
+        return reordered
 
     def select(self, op: str, args, kwargs) -> Optional[PolicySelection]:
         # Forced baseline bypass
@@ -95,6 +121,7 @@ class BackendPolicy:
             def _sig_from_val(v):
                 try:
                     import torch  # type: ignore
+
                     if isinstance(v, torch.Tensor):
                         dev = getattr(v.device, "type", "cpu")
                         return (
@@ -111,6 +138,7 @@ class BackendPolicy:
                 except Exception:
                     pass
                 return (type(v).__name__,)
+
             parts = [str(_sig_from_val(aargs[0]))]
             if len(aargs) > 1:
                 parts.append(str(_sig_from_val(aargs[1])))
@@ -134,15 +162,24 @@ class BackendPolicy:
                 # Record profile sample and decision trace for winner
                 try:
                     if at is not None:
-                        at.record_profile(name, op, "policy_select", device_name, shape_key, gflops=0.0, ms=float(dt_ms))
-                        at.set_params(name, op, "policy_select", device_name, shape_key, {
-                            "decision_trace": {
-                                "mode": "order_probe",
-                                "winner": name,
-                                "latency_ms": float(dt_ms),
+                        at.record_profile(
+                            name, op, "policy_select", device_name, shape_key, gflops=0.0, ms=float(dt_ms)
+                        )
+                        at.set_params(
+                            name,
+                            op,
+                            "policy_select",
+                            device_name,
+                            shape_key,
+                            {
+                                "decision_trace": {
+                                    "mode": "order_probe",
+                                    "winner": name,
+                                    "latency_ms": float(dt_ms),
+                                },
+                                "thresholds": {"retune_rel_var": 0.15},
                             },
-                            "thresholds": {"retune_rel_var": 0.15},
-                        })
+                        )
                 except Exception:
                     pass
                 return PolicySelection(backend_name=name, policy_reason="order_probe", run=runner, latency_ms=dt_ms)
@@ -157,7 +194,9 @@ class BackendPolicy:
         except Exception:
             warmup = 1
         try:
-            early_factor = float(_cfg.get("UHOP_POLICY_BENCH_EARLY") or 2.5)  # early exit if current winner < next candidate first run / factor
+            early_factor = float(
+                _cfg.get("UHOP_POLICY_BENCH_EARLY") or 2.5
+            )  # early exit if current winner < next candidate first run / factor
         except Exception:
             early_factor = 2.5
         timings: List[tuple[str, float, Callable]] = []
@@ -194,7 +233,6 @@ class BackendPolicy:
             if failed or not times:
                 continue
             # Median latency
-            import statistics
             med = statistics.median(times)
             # Record profile sample for each candidate (median)
             try:
@@ -212,31 +250,48 @@ class BackendPolicy:
         # Store decision trace for winner including competing candidates
         try:
             if at is not None:
-                at.set_params(winner_name, op, "policy_select", device_name, shape_key, {
-                    "decision_trace": {
-                        "mode": "benchmark",
-                        "winner": winner_name,
-                        "winner_ms": float(winner_latency),
-                        "candidates": [{"name": n, "median_ms": float(m)} for (n, m, _r) in timings],
+                at.set_params(
+                    winner_name,
+                    op,
+                    "policy_select",
+                    device_name,
+                    shape_key,
+                    {
+                        "decision_trace": {
+                            "mode": "benchmark",
+                            "winner": winner_name,
+                            "winner_ms": float(winner_latency),
+                            "candidates": [{"name": n, "median_ms": float(m)} for (n, m, _r) in timings],
+                        },
+                        "thresholds": {"retune_rel_var": 0.15},
                     },
-                    "thresholds": {"retune_rel_var": 0.15},
-                })
+                )
         except Exception:
             pass
-        return PolicySelection(backend_name=winner_name, policy_reason="benchmark", run=winner_runner, latency_ms=winner_latency)
+        return PolicySelection(
+            backend_name=winner_name, policy_reason="benchmark", run=winner_runner, latency_ms=winner_latency
+        )
 
     def _get_runner(self, backend: str, op: str, args, kwargs) -> Optional[Callable]:
         try:
+
             def _ensure_np32(x):
                 try:
                     return _np.array(x, dtype=_np.float32)
                 except Exception:
                     return x
+
             if backend in ("torch", "cpu") and is_torch_available():
                 if op == "matmul":
                     return lambda a, b, **kw: torch_matmul(a, b, keep_format=kw.get("keep_format"))
                 if op == "conv2d":
-                    return lambda a, b, **kw: torch_conv2d(a, b, stride=kwargs.get("stride", 1), padding=kwargs.get("padding", 0), keep_format=kw.get("keep_format"))
+                    return lambda a, b, **kw: torch_conv2d(
+                        a,
+                        b,
+                        stride=kwargs.get("stride", 1),
+                        padding=kwargs.get("padding", 0),
+                        keep_format=kw.get("keep_format"),
+                    )
                 if op == "relu":
                     return lambda a, **kw: torch_relu(a, keep_format=kw.get("keep_format"))
             if backend == "triton" and is_triton_available():
@@ -249,7 +304,9 @@ class BackendPolicy:
                 if op == "matmul":
                     return lambda a, b, **kw: opencl_matmul(a, b)
                 if op == "conv2d":
-                    return lambda a, b, **kw: opencl_conv2d(a, b, stride=kwargs.get("stride", 1), padding=kwargs.get("padding", 0))
+                    return lambda a, b, **kw: opencl_conv2d(
+                        a, b, stride=kwargs.get("stride", 1), padding=kwargs.get("padding", 0)
+                    )
                 if op == "relu":
                     return lambda a, **kw: opencl_relu(a)
             if backend in ("numpy", "baseline"):
@@ -259,7 +316,9 @@ class BackendPolicy:
             return None
         return None
 
-    def explain(self, op: str, args, kwargs, *, warmup: int = 0, iterations: int = 1, collect_stats: bool = False) -> dict:
+    def explain(
+        self, op: str, args, kwargs, *, warmup: int = 0, iterations: int = 1, collect_stats: bool = False
+    ) -> dict:
         """Explain selection by probing candidate backends in order.
 
         Returns a dict with fields:
@@ -283,7 +342,7 @@ class BackendPolicy:
                 "warmup": warmup,
                 "iterations": iterations,
                 "collect_stats": collect_stats,
-            }
+            },
         }
         if bool(_cfg.get("UHOP_FORCE_BASELINE")):
             info["reason"] = "forced_baseline"
@@ -291,12 +350,14 @@ class BackendPolicy:
         for name in info["order"]:
             runner = self._get_runner(name, op, args, kwargs)
             if runner is None:
-                info["candidates"].append({
-                    "name": name,
-                    "ok": False,
-                    "latency_ms": None,
-                    "error": "unavailable",
-                })
+                info["candidates"].append(
+                    {
+                        "name": name,
+                        "ok": False,
+                        "latency_ms": None,
+                        "error": "unavailable",
+                    }
+                )
                 continue
             try:
                 # Warmup runs (not counted)
@@ -327,20 +388,25 @@ class BackendPolicy:
                     info["selected"] = {"name": name, "latency_ms": median_ms}
                     info["reason"] = "order_probe"
             except Exception as e:
-                info["candidates"].append({
-                    "name": name,
-                    "ok": False,
-                    "latency_ms": None,
-                    "error": str(e)[:240],
-                })
+                info["candidates"].append(
+                    {
+                        "name": name,
+                        "ok": False,
+                        "latency_ms": None,
+                        "error": str(e)[:240],
+                    }
+                )
                 continue
         return info
+
 
 # Global backend manager placeholder (future expansion)
 _backend_manager_singleton = None
 
+
 class DummyBackendManager:
     pass
+
 
 def get_backend_manager():
     global _backend_manager_singleton

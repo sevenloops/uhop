@@ -26,11 +26,7 @@ from .ai_codegen.generator import AICodegen
 # backends
 # lite backend for edge devices (only if torch is not available)
 try:
-    from .backends.lite_backend import (
-        lite_conv2d,
-        lite_matmul,
-        lite_relu,
-    )
+    from .backends.lite_backend import lite_conv2d, lite_matmul, lite_relu
 
     _LITE_BACKEND_AVAILABLE = True
 except ImportError:

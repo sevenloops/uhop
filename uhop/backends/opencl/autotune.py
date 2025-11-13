@@ -2,9 +2,10 @@
 
 Wraps UhopAutotune with convenience accessors and an optional disable gate.
 """
+
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, List, Optional, Tuple
 
 from ... import config as _cfg
 from ...cache import UhopAutotune
@@ -38,7 +39,9 @@ class OCLAutotune:
             return
         self._at.set_params(backend, op, kernel, device, shape_key, params)
 
-    def record_profile(self, backend: str, op: str, kernel: str, device: str, shape_key: str, gflops: float, ms: float) -> None:
+    def record_profile(
+        self, backend: str, op: str, kernel: str, device: str, shape_key: str, gflops: float, ms: float
+    ) -> None:
         if self.disabled:
             return
         self._at.record_profile(backend, op, kernel, device, shape_key, gflops, ms)

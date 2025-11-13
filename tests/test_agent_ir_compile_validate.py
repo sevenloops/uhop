@@ -13,7 +13,7 @@ def _has_pyopencl():
 @pytest.mark.skipif(not _has_pyopencl(), reason="pyopencl not available")
 def test_agent_compile_and_validate_ir_matmul():
     from uhop.agent import _compile_kernel, _validate
-    from uhop.ir import Tensor, MatMul
+    from uhop.ir import MatMul, Tensor
 
     M, K, N = 4, 3, 5
     ir = MatMul(A=Tensor("A", (M, K)), B=Tensor("B", (K, N))).to_dict()
@@ -30,7 +30,7 @@ def test_agent_compile_and_validate_ir_matmul():
 @pytest.mark.skipif(not _has_pyopencl(), reason="pyopencl not available")
 def test_agent_validate_ir_fused():
     from uhop.agent import _validate
-    from uhop.ir import Tensor, FusedMatMulRelu
+    from uhop.ir import FusedMatMulRelu, Tensor
 
     M, K, N = 4, 3, 5
     ir = FusedMatMulRelu(A=Tensor("A", (M, K)), B=Tensor("B", (K, N))).to_dict()

@@ -9,6 +9,7 @@ variable UHOP_ENABLE_VULKAN_POC=1.
 
 No real kernels are executed; matmul is a placeholder that raises at call time.
 """
+
 from __future__ import annotations
 
 import os

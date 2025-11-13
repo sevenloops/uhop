@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'issues/**'
-      - '.github/workflows/sync-issues.yml'
+      - "issues/**"
+      - ".github/workflows/sync-issues.yml"
 
 permissions:
   contents: read
@@ -21,7 +21,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: pip install requests pyyaml

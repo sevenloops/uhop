@@ -1,4 +1,5 @@
 import os
+
 import numpy as np
 import pytest
 
@@ -9,9 +10,11 @@ pytestmark = pytest.mark.skipif(not is_opencl_available(), reason="OpenCL not av
 
 OPT = UHopOptimizer()
 
+
 @OPT.optimize("matmul")
 def mm(A, B):
     return np.array(A) @ np.array(B)
+
 
 def test_opencl_matmul_cache_hit_roundtrip():
     # Force OpenCL preference first so optimizer selects it (and caches backend=opencl)
@@ -27,5 +30,6 @@ def test_opencl_matmul_cache_hit_roundtrip():
     C2 = mm(A, B)
     assert np.allclose(C1, C2, atol=1e-5)
     from uhop.cache import CACHE
+
     rec = CACHE.get("matmul|('numpy', (128, 96), 'float32');('numpy', (96, 64), 'float32')")
     assert rec and rec.get("backend") in ("opencl", "triton", "torch"), "Backend cache not set or unexpected backend"
