@@ -17,12 +17,9 @@ Usage:
 
 import argparse
 import json
-import os
-import sys
 import time
 from collections import defaultdict
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -34,7 +31,7 @@ try:
         torch_matmul,
         torch_relu,
     )
-except:
+except Exception:
     is_torch_available = lambda: False
 
 try:
@@ -44,7 +41,7 @@ try:
         opencl_matmul,
         opencl_relu,
     )
-except:
+except Exception:
     is_opencl_available = lambda: False
 
 try:
@@ -53,7 +50,7 @@ try:
         triton_matmul,
         triton_relu,
     )
-except:
+except Exception:
     is_triton_available = lambda: False
 
 try:
@@ -63,7 +60,7 @@ try:
         lite_matmul,
         lite_relu,
     )
-except:
+except Exception:
     is_lite_backend_available = lambda: False
 
 from uhop.hardware import detect_hardware
@@ -124,11 +121,11 @@ class BenchmarkSuite:
         print("=" * 70)
         print("UHOP Comprehensive Benchmark Suite")
         print("=" * 70)
-        print(f"\nHardware Detected:")
+        print("\nHardware Detected:")
         print(f"  Vendor: {self.hardware.vendor}")
         print(f"  Kind: {self.hardware.kind}")
         print(f"  Name: {self.hardware.name}")
-        print(f"\nAvailable Backends:")
+        print("\nAvailable Backends:")
         for backend, available in self.backends.items():
             status = "✓" if available else "✗"
             print(f"  {status} {backend}")
@@ -188,7 +185,7 @@ class BenchmarkSuite:
 
             error = np.max(np.abs(result_np - expected_np))
             return error
-        except:
+        except Exception:
             return float("inf")
 
     def benchmark_matmul(self, size: Tuple[int, int, int], backends: Optional[List[str]] = None):

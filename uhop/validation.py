@@ -85,7 +85,7 @@ def gen_cases(
     cases: List[List[np.ndarray]] = []
 
     # Randomized cases
-    for i in range(3):
+    for _ in range(3):
         cur: List[np.ndarray] = []
         for spec in input_specs:
             shape = tuple(int(s) for s in spec["shape"])

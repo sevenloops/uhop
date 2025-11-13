@@ -196,6 +196,8 @@ def _enqueue_registry_kernel(
 
 def opencl_matmul(a, b):
     """Delegated to refactored MatmulOp module."""
+    if cl is None:
+        raise RuntimeError("pyopencl not available")
     from .opencl.matmul import MatmulOp
 
     res = MatmulOp().execute(a, b)
@@ -301,6 +303,8 @@ __kernel void conv2d_device(
 
 def opencl_conv2d(input_np, weight_np, stride=1, padding=0, fuse_relu: bool = False):
     """Delegated to refactored Conv2DOp module."""
+    if cl is None:
+        raise RuntimeError("pyopencl not available")
     from .opencl.conv2d import Conv2DOp
 
     res = Conv2DOp().execute(input_np, weight_np, stride=stride, padding=padding, fuse_relu=fuse_relu)
@@ -425,19 +429,3 @@ def opencl_conv2d_backward_weight(
     cl.enqueue_copy(q, grad_w, gw_buf, wait_for=[evt])
     q.finish()
     return grad_w
-
-
-# Fallback stubs when OpenCL is unavailable
-if cl is None:
-
-    def opencl_matmul(*args, **kwargs):  # type: ignore
-        raise RuntimeError("pyopencl not available")
-
-    def opencl_relu(*args, **kwargs):  # type: ignore
-        raise RuntimeError("pyopencl not available")
-
-    def opencl_conv2d(*args, **kwargs):  # type: ignore
-        raise RuntimeError("pyopencl not available")
-
-    def opencl_conv2d_relu(*args, **kwargs):  # type: ignore
-        raise RuntimeError("pyopencl not available")

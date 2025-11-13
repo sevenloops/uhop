@@ -10,6 +10,10 @@ on:
   schedule:
     - cron: "0 6 * * *"
 
+permissions:
+  issues: write
+  contents: read
+
 concurrency:
   group: sync-issues-${{ github.ref }}
   cancel-in-progress: true
