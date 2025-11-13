@@ -1,6 +1,7 @@
 # Issue 22: Evolutionary & Multi-Objective Autotuning
 
 ## Summary
+
 Build on the job orchestrator to support evolutionary search and multi-objective optimization (latency, throughput, power) so tuning scales beyond naive grid searches.
 
 ## Deliverables

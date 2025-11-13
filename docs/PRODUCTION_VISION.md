@@ -44,21 +44,21 @@ Every optimization attempt feeds a central data store, improving prompt strategi
 
 ## Initiative to Issue Map
 
-| Theme | Contributor Issue |
-| --- | --- |
-| MLIR pipeline bootstrap | `issues/12_production_compiler_infrastructure.md` |
-| Baseline performance dataset & predictor | `issues/13_ai_performance_modeling.md` |
-| Hardware capability manifest | `issues/14_hardware_aware_kernel_generation.md` |
-| Kernel security and reproducibility | `issues/15_enterprise_production_ready.md` |
-| Graph capture & fusion heuristics | `issues/16_automated_kernel_fusion.md` |
-| Distributed autotuning scaffolding | `issues/17_scalable_autotuning_infrastructure.md` |
-| Unified buffer layer | `issues/18_cross_platform_unified_memory.md` |
-| Production rollout readiness | `issues/19_production_roadmap_summary.md` |
-| Automation metrics & telemetry | `issues/20_ai_automation_advantage.md` |
-| Core kernel baselines vs vendor targets | `issues/21_core_kernel_baselines.md` |
-| Evolutionary & multi-objective autotuning | `issues/22_autotuning_evolutionary_scheduler.md` |
-| MLIR optimization pass suite | `issues/23_mlir_optimization_pass_suite.md` |
-| Framework integration & observability | `issues/24_framework_monitoring_integration.md` |
-| Competitive benchmarking & positioning | `issues/25_competitive_benchmarking_positioning.md` |
+| Theme                                     | Contributor Issue                                   |
+| ----------------------------------------- | --------------------------------------------------- |
+| MLIR pipeline bootstrap                   | `issues/12_production_compiler_infrastructure.md`   |
+| Baseline performance dataset & predictor  | `issues/13_ai_performance_modeling.md`              |
+| Hardware capability manifest              | `issues/14_hardware_aware_kernel_generation.md`     |
+| Kernel security and reproducibility       | `issues/15_enterprise_production_ready.md`          |
+| Graph capture & fusion heuristics         | `issues/16_automated_kernel_fusion.md`              |
+| Distributed autotuning scaffolding        | `issues/17_scalable_autotuning_infrastructure.md`   |
+| Unified buffer layer                      | `issues/18_cross_platform_unified_memory.md`        |
+| Production rollout readiness              | `issues/19_production_roadmap_summary.md`           |
+| Automation metrics & telemetry            | `issues/20_ai_automation_advantage.md`              |
+| Core kernel baselines vs vendor targets   | `issues/21_core_kernel_baselines.md`                |
+| Evolutionary & multi-objective autotuning | `issues/22_autotuning_evolutionary_scheduler.md`    |
+| MLIR optimization pass suite              | `issues/23_mlir_optimization_pass_suite.md`         |
+| Framework integration & observability     | `issues/24_framework_monitoring_integration.md`     |
+| Competitive benchmarking & positioning    | `issues/25_competitive_benchmarking_positioning.md` |
 
 Each issue now advertises a contained scope, deliverables, and definition of done. The roadmap in `docs/ROADMAP.md` tracks near-term milestones, while this vision document keeps the long-horizon narrative visible without overwhelming the issue tracker.

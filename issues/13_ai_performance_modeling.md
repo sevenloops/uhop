@@ -1,6 +1,7 @@
 # Issue 13: Performance Dataset & Baseline Predictor
 
 ## Summary
+
 Lay the groundwork for learned performance modeling by capturing kernel telemetry into a structured dataset and training a simple predictor that estimates matmul latency. This supplies training data and APIs that later models can extend.
 
 ## Deliverables

@@ -1,6 +1,7 @@
 # Issue 16: Graph Capture & Fusion Candidate Report
 
 ## Summary
+
 Introduce a lightweight graph capture and analysis pass that surfaces profitable fusion candidates before we attempt AI-generated fused kernels. This establishes the groundwork for future automatic fusion by making opportunities visible and quantifiable.
 
 ## Deliverables

@@ -1,6 +1,7 @@
 # Issue 24: Framework Integration & Observability
 
 ## Summary
+
 Bridge UHOP into mainstream ML stacks and add production-grade observability so kernels can be deployed in real training/inference environments.
 
 ## Deliverables

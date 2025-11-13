@@ -1,6 +1,7 @@
 # Issue 21: Core Kernel Baselines & Performance Targets
 
 ## Summary
+
 Deliver hand-tuned baseline kernels per backend so UHOP owns critical operations rather than proxying through third-party libraries. Establish performance targets against vendor stacks to anchor future AI/codegen improvements.
 
 ## Deliverables

@@ -1,6 +1,7 @@
 # Issue 14: Hardware Capability Manifest
 
 ## Summary
+
 Create a shared hardware capabilities manifest that kernel generation and policy code can query. This gives prompts, schedulers, and heuristics concrete data about caches, wavefronts, Tensor Cores, and memory fabrics per device family.
 
 ## Deliverables

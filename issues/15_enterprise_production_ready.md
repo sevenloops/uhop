@@ -1,6 +1,7 @@
 # Issue 15: Kernel Sandbox & Deterministic Builds
 
 ## Summary
+
 Ship the first enterprise-readiness slice by introducing a sandboxed execution path for AI-generated kernels and ensuring compiled artifacts are reproducible. This reduces security risk and gives downstream teams confidence that kernels are safe to run.
 
 ## Deliverables

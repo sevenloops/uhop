@@ -1,6 +1,7 @@
 # Issue 12: MLIR Matmul Pipeline Spike
 
 ## Summary
+
 Bootstrap the MLIR toolchain inside UHOP by standing up a matmul-only pipeline that lowers the existing IR to runnable GPU code. The goal is to prove out the end-to-end toolchain while keeping scope tight.
 
 ## Deliverables

@@ -1,6 +1,7 @@
 # Issue 17: Autotuning Job Orchestrator Skeleton
 
 ## Summary
+
 Stand up the scaffolding for scalable autotuning by defining the job format, persistence schema, and a minimal parallel executor that can fan out tuning jobs across local processes. This gives us the backbone required for future evolutionary search and cloud execution.
 
 ## Deliverables

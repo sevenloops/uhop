@@ -1,6 +1,7 @@
 # Issue 19: Publish Production Vision & Release Checklist
 
 ## Summary
+
 Finalize the production vision documentation, align it with the near-term roadmap, and wire up a release-readiness checklist that maintainers can run before cutting enterprise-facing builds.
 
 ## Deliverables

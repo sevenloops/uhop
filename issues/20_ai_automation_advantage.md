@@ -1,6 +1,7 @@
 # Issue 20: Automation Metrics & Learning Loop Telemetry
 
 ## Summary
+
 Instrument the AI pipeline so we can quantify automation leverage: how many kernels are generated, validated, promoted, and how performance improves over manual baselines. These metrics power the automation flywheel and justify investments.
 
 ## Deliverables

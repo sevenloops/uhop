@@ -1,7 +1,7 @@
 # UHOP Intermediate Representation (IR)
 
 The UHOP IR is a minimal, extensible schema used to describe operator
-implementations independent of any specific backend.  The schema is designed
+implementations independent of any specific backend. The schema is designed
 to be serialized as canonical JSON so that artifacts (generated kernels,
 autotune records, telemetry) can be keyed by a stable hash.
 
@@ -18,18 +18,18 @@ autotune records, telemetry) can be keyed by a stable hash.
 
 ### Tensor
 
-| Field        | Type               | Notes                                                     |
-|--------------|--------------------|-----------------------------------------------------------|
-| `name`       | `str`              | Logical identifier used in prompts / debugging            |
-| `shape`      | `Tuple[int, ...]`  | Concrete extents (no symbolic dims yet)                   |
-| `dtype`      | `str`              | e.g. `"f32"`, `"f16"`, `"i32"`                           |
-| `layout`     | `str`              | One of `row_major`, `col_major`, `nchw`, `nhwc`, …         |
-| `strides`    | `Tuple[int, ...]`? | Optional explicit strides when non-contiguous             |
-| `memory_space` | `str`            | `global`, `local`, `private`, `constant`                  |
+| Field          | Type               | Notes                                              |
+| -------------- | ------------------ | -------------------------------------------------- |
+| `name`         | `str`              | Logical identifier used in prompts / debugging     |
+| `shape`        | `Tuple[int, ...]`  | Concrete extents (no symbolic dims yet)            |
+| `dtype`        | `str`              | e.g. `"f32"`, `"f16"`, `"i32"`                     |
+| `layout`       | `str`              | One of `row_major`, `col_major`, `nchw`, `nhwc`, … |
+| `strides`      | `Tuple[int, ...]`? | Optional explicit strides when non-contiguous      |
+| `memory_space` | `str`              | `global`, `local`, `private`, `constant`           |
 
 ### Schedule
 
-Optional execution hints that backend lowerings can interpret.  All fields are
+Optional execution hints that backend lowerings can interpret. All fields are
 optional integers:
 
 - `tile_m`, `tile_n`, `tile_k`
@@ -45,13 +45,13 @@ Currently supported ops (in `uhop/ir/ir.py`):
 - `Relu`
 
 Each op embeds the relevant tensors (`A`, `B`, `C`, …) and an optional
-`schedule` block.  Ops expose `to_dict()` / `from_dict()` helpers and
+`schedule` block. Ops expose `to_dict()` / `from_dict()` helpers and
 `infer_output()` methods so callers do not have to rebuild shape logic.
 
 ## Stable hashing
 
 IR dictionaries are serialized with `json.dumps(..., sort_keys=True)` and fed
-into SHA-256 via `compute_stable_hash`.  This guarantees:
+into SHA-256 via `compute_stable_hash`. This guarantees:
 
 - Key order does not matter (dictionaries can be reordered safely)
 - Numeric values are normalized (we stringify ints/floats before hashing)
@@ -62,7 +62,7 @@ Any semantic change — including schedule tweaks — produces a different hash.
 
 ## Lowering to OpenCL
 
-`uhop/ir/opencl_lowering.py` implements the first backend lowering.  It accepts
+`uhop/ir/opencl_lowering.py` implements the first backend lowering. It accepts
 an IR op instance and returns a dictionary with:
 
 - `language`: currently always `"opencl"`
@@ -70,7 +70,7 @@ an IR op instance and returns a dictionary with:
 - `source`: OpenCL C source text
 - Optional metadata such as `tile`/`vec` extracted from the schedule
 
-The lowering currently emits a correctness-first kernel (no tiling yet).  The
+The lowering currently emits a correctness-first kernel (no tiling yet). The
 new OpenCL execution path in `uhop/backends/opencl/matmul.py` now accepts
 an IR op and will:
 

@@ -1,6 +1,7 @@
 # Issue 18: Unified Buffer Abstraction (MVP)
 
 ## Summary
+
 Introduce a shared buffer abstraction that wraps backend-specific allocations and keeps track of data residency. This is the first step toward cross-platform unified memory while remaining minimal enough to ship quickly.
 
 ## Deliverables

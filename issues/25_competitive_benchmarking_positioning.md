@@ -1,6 +1,7 @@
 # Issue 25: Competitive Benchmarking & Positioning
 
 ## Summary
+
 Document how UHOP compares to Triton, MLIR/IREE, oneAPI, and vendor libraries through quantitative benchmarks and qualitative migration guides so contributors and users understand where we stand and where we are heading.
 
 ## Deliverables
